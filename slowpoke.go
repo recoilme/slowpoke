@@ -139,11 +139,11 @@ func Get(file string, key []byte) ([]byte, error) {
 		return nil, ErrKeyNotFound
 	}
 	kv := item.(*KV)
-	fmt.Printf("kv:%+v \n", kv)
+	//fmt.Printf("kv:%+v \n", kv)
 	if _, err = db.FileVal.Seek(int64(kv.Seek), 0); err == nil {
 		byteSlice := make([]byte, kv.Size)
 		if _, err := db.FileVal.Read(byteSlice); err == nil {
-			fmt.Printf("kv:%+v b:%s \n", kv, string(byteSlice))
+			//fmt.Printf("kv:%+v b:%s \n", kv, string(byteSlice))
 			return byteSlice, nil
 		}
 	}
@@ -291,105 +291,3 @@ func CloseDatabase() {
 		d.Mux.Unlock()
 	}
 }
-
-/*
-	muxDbs = new(sync.RWMutex)
-	muxDb = new(sync.RWMutex)
-	database = &DataBase{}
-	database.DataBases = make(map[string]*DB)
-	var err error
-	database.FileDataBases, err = os.OpenFile("slowpoke.db", os.O_CREATE|os.O_RDWR, 0666)
-	if err != nil {
-		panic(err)
-	}
-	if e := Set("users", []byte("a")); e != nil {
-		panic(e)
-	}
-	Set("users", []byte("aa"))
-	Set("users", []byte("b"))
-	Set("users", []byte("bb"))
-	db := getDb("users")
-	db.T.Descend(iterator)
-
-	for i := 8; i <= 12; i++ {
-		bs := make([]byte, 4)
-		binary.BigEndian.PutUint32(bs, uint32(i))
-		Set("userids", bs)
-	}
-	userids := getDb("userids")
-
-	userids.T.Descend(func(item btree.Item) bool {
-		kvi := item.(*KV)
-		k := binary.BigEndian.Uint32(kvi.Key)
-		fmt.Printf("Descend: %d \n", k)
-		return true
-	})
-
-	userids.T.Ascend(func(item btree.Item) bool {
-		kvi := item.(*KV)
-		k := binary.BigEndian.Uint32(kvi.Key)
-
-		fmt.Printf("Ascend: %d \n", k)
-		return true
-	})
-*/
-
-/*
-// Set adds the given key to the tree.
-// If tree not exists it will be created
-// If an item in the tree already equals the given one, it is removed from the tree and inserted.
-//
-// nil cannot be added to the tree (will error).
-func Set(file string, key []byte) error {
-	if key == nil {
-		return errors.New("key is nil")
-	}
-	db := getDb(file)
-	if db.T == nil {
-		return errors.New("tree is nil")
-	}
-	m.Lock()
-	db.T.ReplaceOrInsert(&KV{Key: key})
-	m.Unlock()
-	return nil
-}
-
-func getDb(file string) (db *DB) {
-	var ok bool
-	mmap.RLock()
-	db, ok = dbs[file]
-	mmap.RUnlock()
-	if !ok {
-		fmt.Println("new db")
-		mmap.Lock()
-		db = &DB{T: btree.New(16, nil)}
-		dbs[file] = db
-		mmap.Unlock()
-	}
-
-	return db
-}
-
-func iterator(item btree.Item) bool {
-	kvi := item.(*KV)
-	fmt.Printf("iterator: %s \n", string(kvi.Key))
-	return true
-}
-
-*/
-/*output:
-iterator: bb
-iterator: b
-iterator: aa
-iterator: a
-Descend: 12
-Descend: 11
-Descend: 10
-Descend: 9
-Descend: 8
-Ascend: 8
-Ascend: 9
-Ascend: 10
-Ascend: 11
-Ascend: 12
-*/
