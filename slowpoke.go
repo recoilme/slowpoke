@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"log"
@@ -15,12 +16,14 @@ import (
 var (
 	database       *DataBase
 	ErrKeyIsNil    = errors.New("Error: key is nil")
+	ErrKeyNotFound = errors.New("Error: key not found")
 	ErrEmptyDbName = errors.New("Error: empty db name")
 )
 
 type KV struct {
-	Key   []byte
-	Value []byte
+	Key  []byte
+	Seek uint32
+	Size uint32
 }
 
 type DB struct {
@@ -47,13 +50,14 @@ func (i1 *KV) Less(item btree.Item, ctx interface{}) bool {
 func main() {
 	InitDatabase()
 	defer CloseDatabase()
-	Set("users", []byte("aa"))
-	Set("users", []byte("a"))
-	Set("msg", []byte("msg"))
-	keys := Keys("msg")
-	for _, k := range keys {
-		fmt.Println(":", string(k), ":")
-	}
+	err := Set("users", []byte("aa"), []byte("1"))
+	fmt.Println(err)
+	//Set("users", []byte("a"), []byte("2"))
+	//Set("msg", []byte("msg"), []byte("3"))
+	//keys := Keys("users")
+	//for _, k := range keys {
+	//fmt.Println(":", string(k), ":")
+	//}
 
 	key, err := Get("users", []byte("aa"))
 	fmt.Println("key:", string(key), "err:", err)
@@ -64,28 +68,58 @@ func main() {
 // If an item in the tree already equals the given one, it is removed from the tree and inserted.
 //
 // nil cannot be added to the tree (will error).
-func Set(file string, key []byte) error {
+func Set(file string, key []byte, val []byte) error {
 	if key == nil {
 		return ErrKeyIsNil
 	}
 	var db *DB
 	var err error
+	var seek int64
 	if db, err = GetDb(file); err != nil {
 		log.Fatal(err)
 	}
 	db.Mux.Lock()
 	defer db.Mux.Unlock()
-	if _, err = db.FileKey.Seek(0, 2); err == nil {
-		w := bufio.NewWriter(db.FileKey)
-		w.WriteByte('+')
-		if _, err = w.Write(key); err == nil {
-			w.WriteString("\n")
-			if err = w.Flush(); err == nil {
-				db.Btree.ReplaceOrInsert(&KV{Key: key})
-
+	//write value
+	if val != nil {
+		if seek, err = db.FileVal.Seek(0, 2); err == nil {
+			w := bufio.NewWriter(db.FileVal)
+			if _, err = w.Write(val); err == nil {
+				err = w.Flush()
 			}
 		}
 	}
+	if err != nil {
+		return err
+	}
+
+	//write key
+
+	if _, err = db.FileKey.Seek(0, 2); err == nil {
+		wk := bufio.NewWriter(db.FileKey)
+		err = wk.WriteByte('+')
+		if err == nil {
+			//ignore error? what may happen?
+			//size val
+			lenbuf := make([]byte, 4)
+			binary.BigEndian.PutUint32(lenbuf, uint32(len(val)))
+			_, err = wk.Write(lenbuf)
+			//seek val
+			seekbuf := make([]byte, 4)
+			binary.BigEndian.PutUint32(seekbuf, uint32(seek))
+			_, err = wk.Write(seekbuf)
+			//key
+			_, err = wk.Write(key)
+			//end line (why just byte 13 not work?)
+			_, err = wk.WriteString("\n")
+			err = wk.Flush()
+		}
+	}
+
+	if err != nil {
+		return err
+	}
+	db.Btree.ReplaceOrInsert(&KV{Key: key, Seek: uint32(seek), Size: uint32(len(val))})
 	return err
 }
 
@@ -101,8 +135,19 @@ func Get(file string, key []byte) ([]byte, error) {
 	db.Mux.RLock()
 	defer db.Mux.RUnlock()
 	item := db.Btree.Get(&KV{Key: key})
-	kvi := item.(*KV)
-	return kvi.Key, nil
+	if item == nil {
+		return nil, ErrKeyNotFound
+	}
+	kv := item.(*KV)
+	fmt.Printf("kv:%+v \n", kv)
+	if _, err = db.FileVal.Seek(int64(kv.Seek), 0); err == nil {
+		byteSlice := make([]byte, kv.Size)
+		if _, err := db.FileVal.Read(byteSlice); err == nil {
+			fmt.Printf("kv:%+v b:%s \n", kv, string(byteSlice))
+			return byteSlice, nil
+		}
+	}
+	return nil, err
 }
 
 // Keys return all keys in descend order
