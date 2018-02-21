@@ -1,6 +1,6 @@
-// Package slowpoke implements a low-level in-files and in-memory key/value store in pure Go.
-// It persists to disk, and uses locking for multiple
-// readers and a single writer.
+// Package slowpoke implements a low-level key/value store in pure Go.
+// Keys stored in memory, Value stored on disk
+// It uses locking for multiple readers and a single writer.
 package slowpoke
 
 import (
@@ -140,9 +140,11 @@ func Get(file string, key []byte) ([]byte, error) {
 	return nil, err
 }
 
-// Keys return all keys in descend order
+// Keys return all keys in asc/desc order
 // if limit == 0 return all keys
-func Keys(name string, limit, offset int) [][]byte {
+// Skip offset count
+// Counters not thread safe!?
+func Keys(name string, limit, offset int, asc bool) [][]byte {
 	var keys = make([][]byte, 0, 0)
 	var db *DB
 	var ok bool
@@ -152,12 +154,14 @@ func Keys(name string, limit, offset int) [][]byte {
 	if !ok {
 		return keys
 	}
+
 	var counter int
-	//fmt.Println("Keys")
-	db.Btree.Descend(func(item btree.Item) bool {
+	iterator := func(item btree.Item) bool {
 		kvi := item.(*KV)
 		//fmt.Printf("%+v\n", kvi)
 		if counter < offset {
+			counter++
+			limit++
 			return true
 		}
 		keys = append(keys, kvi.Key)
@@ -166,7 +170,12 @@ func Keys(name string, limit, offset int) [][]byte {
 			return false
 		}
 		return true
-	})
+	}
+	if asc {
+		db.Btree.Ascend(iterator)
+	} else {
+		db.Btree.Descend(iterator)
+	}
 	//fmt.Println(keys)
 	return keys
 }
@@ -202,7 +211,7 @@ func GetDb(name string) (db *DB, err error) {
 	return db, err
 }
 
-// Database create/open slowpoke with all Dbs
+// InitDatabase create/open slowpoke with all Dbs
 // and init it
 func InitDatabase() {
 
