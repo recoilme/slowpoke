@@ -143,7 +143,7 @@ func Get(file string, key []byte) ([]byte, error) {
 // Keys return all keys in asc/desc order
 // if limit == 0 return all keys
 // Skip offset count
-// Counters not thread safe!?
+// Counters not thread safe!? add lock?
 func Keys(name string, limit, offset int, asc bool) [][]byte {
 	var keys = make([][]byte, 0, 0)
 	var db *DB
@@ -172,6 +172,7 @@ func Keys(name string, limit, offset int, asc bool) [][]byte {
 		return true
 	}
 	if asc {
+		//db.Btree.Cursor().Seek()
 		db.Btree.Ascend(iterator)
 	} else {
 		db.Btree.Descend(iterator)
