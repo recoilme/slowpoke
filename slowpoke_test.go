@@ -1,19 +1,45 @@
-package main
+package slowpoke
 
 import (
+	"encoding/binary"
 	"fmt"
 	"testing"
 )
 
-func TestExample(t *testing.T) {
+func TestHelloWorld(t *testing.T) {
 	InitDatabase()
-	err := Set("test", []byte("hello"), []byte("world"))
+	world := "world"
+	err := Set("test", []byte("hello"), []byte(world))
 	if err != nil {
-		fmt.Println(err)
+		t.Error(err)
 	}
 	val, err := Get("test", []byte("hello"))
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(string(val))
+	if string(val) != world {
+		t.Error()
+	}
+	CloseDatabase()
+}
+
+func TestKeys(t *testing.T) {
+	InitDatabase()
+	testSize := 100000
+	file := "TestKeys"
+	for i := 0; i < testSize; i++ {
+		b := make([]byte, 4)
+		binary.BigEndian.PutUint32(b, uint32(i))
+		Set(file, b, b)
+	}
+	keys := Keys(file, 0, 0)
+	//fmt.Println("return keys", keys)
+	if len(keys) != testSize {
+		t.Error(len(keys))
+	}
+	//for _, v := range keys {
+	//key := int(binary.BigEndian.Uint32(v))
+	//fmt.Println(key)
+	//}
+	CloseDatabase()
 }

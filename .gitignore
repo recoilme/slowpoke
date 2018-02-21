@@ -2,3 +2,5 @@
 *.db
 *.slow
 *.poke
+*.out
+.DS_Store
