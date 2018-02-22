@@ -42,7 +42,9 @@ func TestAppend(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-
+		if string(b) != "123" {
+			t.Error("not seek to begeining of file with Rlock")
+		}
 		readmessages <- fmt.Sprintf("read N:%d  content:%s", i, string(b))
 	}
 

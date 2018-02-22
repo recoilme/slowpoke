@@ -47,7 +47,7 @@ func (sf *SyncFile) Read(size int64, seek int64) ([]byte, error) {
 }
 
 func (sf *SyncFile) read(buf *bytes.Buffer, size int64, seek int64) ([]byte, error) {
-	sf.mu.RLock()
+	sf.mu.RLock() //with Lock - no problem here
 	defer sf.mu.RUnlock()
 	var err error
 	_, err = sf.f.Seek(seek, 0)
