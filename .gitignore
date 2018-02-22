@@ -3,4 +3,5 @@
 *.slow
 *.poke
 *.out
+*.tmp
 .DS_Store
