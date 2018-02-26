@@ -5,3 +5,6 @@
 *.out
 *.tmp
 .DS_Store
+files
+data
+*.idx
