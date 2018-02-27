@@ -57,7 +57,7 @@ func log(i interface{}) {
 		return
 	}
 	t := time.Now()
-	fmt.Printf("%02d.%02d.%04d %02d:%02d:%02d\t%s\n",
+	fmt.Printf("%02d.%02d.%04d %02d:%02d:%02d\t%v\n",
 		t.Day(), t.Month(), t.Year(),
 		t.Hour(), t.Minute(), t.Second(), i)
 }
@@ -78,8 +78,12 @@ func checkAndCreate(path string) (bool, error) {
 }
 
 func writeKey(db *DB, key []byte, seek, size uint32) (err error) {
-
-	cmd := &Cmd{Type: 0, Seek: seek, Size: size, Key: key}
+	var t uint8
+	if size == 0 && seek == 0 {
+		//delete
+		t = 1
+	}
+	cmd := &Cmd{Type: t, Seek: seek, Size: size, Key: key}
 	//get buf from pool
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
@@ -102,7 +106,10 @@ func writeKey(db *DB, key []byte, seek, size uint32) (err error) {
 	if err != nil {
 		return err
 	}
-	db.Btree.ReplaceOrInsert(cmd)
+	if t == 0 {
+		db.Btree.ReplaceOrInsert(cmd)
+	}
+
 	return err
 }
 
@@ -123,7 +130,7 @@ func Set(file string, key, val []byte) (err error) {
 	return err
 }
 
-// Close close filekey and file val and delete db from map
+// Close close file key and file val and delete db from map
 func Close(file string) (err error) {
 	db, ok := dbs[file]
 	if !ok {
@@ -180,6 +187,22 @@ func Open(file string) error {
 	return nil
 }
 
+func Delete(file string, key []byte) (deleted bool, err error) {
+	db, ok := dbs[file]
+	if !ok {
+		return deleted, ErrDbNotOpen
+	}
+	db.Mux.Lock()
+	defer db.Mux.Unlock()
+	res := db.Btree.Delete(&Cmd{Key: key})
+	if res != nil {
+		deleted = true
+	}
+	err = writeKey(db, key, uint32(0), uint32(0))
+	return deleted, err
+}
+
+// Get return value by key or nil and error
 func Get(file string, key []byte) (val []byte, err error) {
 	db, ok := dbs[file]
 	if !ok {
@@ -224,8 +247,11 @@ func readTree(f *syncfile.SyncFile) (*btree.BTree, error) {
 		if err != nil {
 			break
 		}
-		if cmd.Type == 0 {
+		switch cmd.Type {
+		case 0:
 			btree.ReplaceOrInsert(cmd)
+		case 1:
+			btree.Delete(cmd)
 		}
 		//fmt.Printf("%s %+v\n", string(cmd.Key), cmd)
 	}

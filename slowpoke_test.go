@@ -99,3 +99,33 @@ func TestAsync(t *testing.T) {
 	wg.Wait()
 
 }
+
+func TestDelete(t *testing.T) {
+	var err error
+	f := "2.db"
+	os.Remove(f)
+	err = Open(f)
+	ch(err, t)
+	defer Close(f)
+	err = Set(f, []byte("1"), []byte("11"))
+	ch(err, t)
+	err = Set(f, []byte("2"), []byte("22"))
+	ch(err, t)
+	res, err := Get(f, []byte("2"))
+	log(res)
+	deleted, err := Delete(f, []byte("2"))
+	log(deleted)
+	if !deleted {
+		t.Error("not deleted")
+	}
+	_, err = Get(f, []byte("2"))
+	log(err)
+	Close(f)
+	err = Open(f)
+	ch(err, t)
+	_, err = Get(f, []byte("2"))
+	log(err)
+	d, _ := Get(f, []byte("1"))
+	log(d)
+	Close(f)
+}
