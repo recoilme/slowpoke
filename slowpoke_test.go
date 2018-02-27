@@ -187,7 +187,9 @@ func TestKeys(t *testing.T) {
 		s += string(r)
 	}
 	log(s)
-
+	if s != "20" {
+		t.Error()
+	}
 }
 
 func TestAsyncKeys(t *testing.T) {

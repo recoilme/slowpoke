@@ -268,12 +268,11 @@ func (i1 *Cmd) Less(item btree.Item, ctx interface{}) bool {
 	return false
 }
 
-// Keys return keys in asc/desc order (false - descending/true - ascending)
+// Keys return keys in asc/desc order (false - descending,true - ascending)
 // if limit == 0 return all keys
-// Skip offset records count
+// offset - skip count records
 // If from not nil - return keys after from (from not included)
 // If last byte of from == "*" - use as prefix
-
 func Keys(file string, from []byte, limit, offset int, asc bool) ([][]byte, error) {
 	var keys = make([][]byte, 0, 0)
 	db, ok := dbs[file]
