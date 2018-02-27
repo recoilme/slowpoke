@@ -187,6 +187,7 @@ func Open(file string) error {
 	return nil
 }
 
+// Delete remove key from tree and add record to log
 func Delete(file string, key []byte) (deleted bool, err error) {
 	db, ok := dbs[file]
 	if !ok {
@@ -265,4 +266,51 @@ func (i1 *Cmd) Less(item btree.Item, ctx interface{}) bool {
 		return true
 	}
 	return false
+}
+
+// Keys return all keys in asc/desc order
+// if limit == 0 return all keys
+// Skip offset count
+// Counters not thread safe!? add lock?
+func Keys(file string, from []byte, limit, offset int, asc bool) ([][]byte, error) {
+	var keys = make([][]byte, 0, 0)
+	db, ok := dbs[file]
+	if !ok {
+		return nil, ErrDbNotOpen
+	}
+
+	db.Mux.RLock()
+	defer db.Mux.RUnlock()
+
+	var counter int
+	iterator := func(item btree.Item) bool {
+		kvi := item.(*Cmd)
+		//log(kvi)
+
+		if from != nil {
+			if bytes.Equal(kvi.Key, from) {
+				//found
+				from = nil
+			}
+			return true
+		}
+		if counter < offset {
+			counter++
+			limit++
+			return true
+		}
+		keys = append(keys, kvi.Key)
+		counter++
+		if counter == limit {
+			return false
+		}
+		return true
+	}
+	if asc {
+		db.Btree.Ascend(iterator)
+	} else {
+		db.Btree.Descend(iterator)
+	}
+	//fmt.Println(keys)
+	return keys, nil
 }

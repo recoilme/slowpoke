@@ -129,3 +129,100 @@ func TestDelete(t *testing.T) {
 	log(d)
 	Close(f)
 }
+
+func TestKeys(t *testing.T) {
+	var err error
+	f := "keys.db"
+	os.Remove(f)
+	err = Open(f)
+	ch(err, t)
+	defer Close(f)
+	append := func(i int) {
+
+		k := []byte(fmt.Sprintf("%02d", i))
+		v := []byte("Val:" + strconv.Itoa(i))
+		err := Set(f, k, v)
+		ch(err, t)
+
+	}
+	for i := 1; i <= 20; i++ {
+		append(i)
+	}
+
+	res, err := Keys(f, nil, 0, 10, false)
+	var s = ""
+	for _, r := range res {
+		s += string(r)
+	}
+	log(s)
+	s = ""
+	from, err := Keys(f, []byte("10"), 2, 0, true)
+	for _, r := range from {
+		s += string(r)
+	}
+	log(s)
+	s = ""
+	des, err := Keys(f, []byte("10"), 2, 2, false)
+	for _, r := range des {
+		s += string(r)
+	}
+	log(s)
+	if s != "0706" {
+		t.Error()
+	}
+	s = ""
+	all, err := Keys(f, nil, 0, 0, false)
+	for _, r := range all {
+		s += string(r)
+	}
+	log(s)
+	if s != "2019181716151413121110090807060504030201" {
+		t.Error()
+	}
+
+}
+
+func TestAsyncKeys(t *testing.T) {
+	var err error
+	f := "AsyncKeys.db"
+	os.Remove(f)
+	err = Open(f)
+	ch(err, t)
+	defer Close(f)
+	append := func(i int) {
+
+		k := []byte(fmt.Sprintf("%02d", i))
+		v := []byte("Val:" + strconv.Itoa(i))
+		err := Set(f, k, v)
+		ch(err, t)
+
+	}
+	for i := 1; i <= 20; i++ {
+		append(i)
+	}
+
+	readmessages := make(chan string)
+	var wg sync.WaitGroup
+
+	read := func(i int) {
+		defer wg.Done()
+		slice, _ := Keys(f, nil, 1, i-1, true)
+		var s = ""
+		for _, r := range slice {
+			s += string(r)
+		}
+		readmessages <- fmt.Sprintf("read N:%d  content:%s", i, s)
+	}
+
+	for i := 1; i <= 10; i++ {
+		wg.Add(1)
+		go read(i)
+	}
+	go func() {
+		for i := range readmessages {
+			fmt.Println(i)
+		}
+	}()
+
+	wg.Wait()
+}
