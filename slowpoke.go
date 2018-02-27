@@ -24,6 +24,8 @@ var (
 	dbs       = make(map[string]*DB)
 
 	ErrKeyNotFound = errors.New("Error: key not found")
+	ErrDbOpened    = errors.New("Error: db is opened")
+	ErrDbNotOpen   = errors.New("Error: db not open")
 
 	bufPool = &sync.Pool{
 		New: func() interface{} {
@@ -38,6 +40,8 @@ const (
 
 type DB struct {
 	Btree *btree.BTree
+	Fkey  *syncfile.SyncFile
+	Fval  *syncfile.SyncFile
 	Mux   *sync.RWMutex
 }
 
@@ -64,7 +68,7 @@ func checkAndCreate(path string) (bool, error) {
 	if err == nil {
 		return true, err
 	}
-	// create file if not exists
+	// create dirs if file not exists
 	if os.IsNotExist(err) {
 		if filepath.Dir(path) != "." {
 			return false, os.MkdirAll(filepath.Dir(path), 0777)
@@ -73,26 +77,7 @@ func checkAndCreate(path string) (bool, error) {
 	return false, err
 }
 
-func writeVal(file string, val []byte) (seek int64, n int, err error) {
-	exists, err := checkAndCreate(file)
-	if exists && err != nil {
-		return 0, 0, err
-	}
-	f, err := syncfile.NewSyncFile(file, FileMode)
-	if err != nil {
-		return 0, 0, err
-	}
-	defer f.Close()
-	//fmt.Println(string(buf.Bytes()))
-	return f.Write(val)
-}
-
-func writeKey(file string, key []byte, seek, size uint32) (int64, int, error) {
-	fk, err := syncfile.NewSyncFile(file+".idx", FileMode)
-	if err != nil {
-		return 0, 0, err
-	}
-	defer fk.Close()
+func writeKey(db *DB, key []byte, seek, size uint32) (err error) {
 
 	cmd := &Cmd{Type: 0, Seek: seek, Size: size, Key: key}
 	//get buf from pool
@@ -108,40 +93,99 @@ func writeKey(file string, key []byte, seek, size uint32) (int64, int, error) {
 	binary.BigEndian.PutUint32(lenbuf, uint32(buf.Len()))
 
 	//write
-	fk.Write(lenbuf)
-	return fk.Write(buf.Bytes())
-}
 
-func Set(file string, key, val []byte) error {
-	var err error
-	seek, writed, err := writeVal(file, val)
+	_, _, err = db.Fkey.Write(lenbuf)
 	if err != nil {
 		return err
 	}
-
-	_, _, err = writeKey(file, key, uint32(seek), uint32(writed))
+	_, _, err = db.Fkey.Write(buf.Bytes())
 	if err != nil {
 		return err
 	}
+	db.Btree.ReplaceOrInsert(cmd)
 	return err
 }
 
-func Get(file string, key []byte) (val []byte, err error) {
-	var db *DB //= &DB{Btree: btree.New(16, nil), Mux: new(sync.RWMutex)}
-	//var ok bool
-	_, ok := dbs[file]
+// Set store val and key
+func Set(file string, key, val []byte) (err error) {
+	db, ok := dbs[file]
 	if !ok {
-		db, err = readTree(file)
-		if err != nil {
-			return nil, err
+		return ErrDbNotOpen
+	}
+	db.Mux.Lock()
+	defer db.Mux.Unlock()
+	seek, writed, err := db.Fval.Write(val)
+	if err != nil {
+		return err
+	}
+
+	err = writeKey(db, key, uint32(seek), uint32(writed))
+	return err
+}
+
+// Close close filekey and file val and delete db from map
+func Close(file string) (err error) {
+	db, ok := dbs[file]
+	if !ok {
+		return ErrDbNotOpen
+	}
+	err = db.Fkey.Close()
+	err = db.Fkey.Close()
+	delete(dbs, file)
+	return err
+}
+
+// Open create file (with dirs) or read keys to map
+func Open(file string) error {
+	_, ok := dbs[file]
+	if ok {
+		return ErrDbOpened
+	}
+	exists, err := checkAndCreate(file)
+	if exists && err != nil {
+		return err
+	}
+	//files
+	fk, err := syncfile.NewSyncFile(file+".idx", FileMode)
+	if err != nil {
+		return err
+	}
+	fv, err := syncfile.NewSyncFile(file, FileMode)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		//new DB
+		db := &DB{
+			Btree: btree.New(16, nil),
+			Mux:   new(sync.RWMutex),
+			Fkey:  fk,
+			Fval:  fv,
 		}
 		dbs[file] = db
 	} else {
-		db = dbs[file]
+		//read DB
+		tree, err := readTree(fk)
+		if err != nil {
+			return err
+		}
+		db := &DB{
+			Btree: tree,
+			Mux:   new(sync.RWMutex),
+			Fkey:  fk,
+			Fval:  fv,
+		}
+		dbs[file] = db
 	}
-	//db, _ := dbs[file]
-	//log(db)
-	//_ = db
+	return nil
+}
+
+func Get(file string, key []byte) (val []byte, err error) {
+	db, ok := dbs[file]
+	if !ok {
+		return nil, ErrDbNotOpen
+	}
+
 	db.Mux.RLock()
 	defer db.Mux.RUnlock()
 	item := db.Btree.Get(&Cmd{Key: key})
@@ -149,39 +193,17 @@ func Get(file string, key []byte) (val []byte, err error) {
 		return nil, ErrKeyNotFound
 	}
 	kv := item.(*Cmd)
-
-	f, err := syncfile.NewSyncFile(file, FileMode)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	return f.Read(int64(kv.Size), int64(kv.Seek))
+	return db.Fval.Read(int64(kv.Size), int64(kv.Seek))
 }
 
-func readTree(fileval string) (*DB, error) {
-	log("readtree")
-	file := fileval + ".idx"
-	var db = &DB{Btree: btree.New(16, nil), Mux: new(sync.RWMutex)}
-	db.Mux.Lock()
-	defer db.Mux.Unlock()
-	//dbs[file] = db
-
-	exists, err := checkAndCreate(file)
-	if !exists || err != nil {
-		return nil, err
-	}
+func readTree(f *syncfile.SyncFile) (*btree.BTree, error) {
+	//log("readtree")
+	var btree = btree.New(16, nil)
 
 	//get buf from pool
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
-
-	f, err := syncfile.NewSyncFile(file, FileMode)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
 
 	b, err := f.ReadFile()
 	if err != nil {
@@ -203,14 +225,12 @@ func readTree(fileval string) (*DB, error) {
 			break
 		}
 		if cmd.Type == 0 {
-			db.Btree.ReplaceOrInsert(cmd)
+			btree.ReplaceOrInsert(cmd)
 		}
-
 		//fmt.Printf("%s %+v\n", string(cmd.Key), cmd)
 	}
 	//fmt.Printf(" %+v\n", dbs[file].Btree.Len())
-	log(db)
-	return db, err
+	return btree, err
 }
 
 func (i1 *Cmd) Less(item btree.Item, ctx interface{}) bool {
