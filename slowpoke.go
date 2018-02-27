@@ -268,10 +268,10 @@ func (i1 *Cmd) Less(item btree.Item, ctx interface{}) bool {
 	return false
 }
 
-// Keys return all keys in asc/desc order
+// Keys return keys in asc/desc order (false - descending/true - ascending)
 // if limit == 0 return all keys
-// Skip offset count
-// Counters not thread safe!? add lock?
+// Skip offset records count
+// If from not nil - return keys after from (from not included)
 func Keys(file string, from []byte, limit, offset int, asc bool) ([][]byte, error) {
 	var keys = make([][]byte, 0, 0)
 	db, ok := dbs[file]
@@ -313,4 +313,24 @@ func Keys(file string, from []byte, limit, offset int, asc bool) ([][]byte, erro
 	}
 	//fmt.Println(keys)
 	return keys, nil
+}
+
+func writeGob(filePath string, object interface{}) error {
+	file, err := os.Create(filePath)
+	if err == nil {
+		encoder := gob.NewEncoder(file)
+		encoder.Encode(object)
+	}
+	file.Close()
+	return err
+}
+
+func readGob(filePath string, object interface{}) error {
+	file, err := os.Open(filePath)
+	if err == nil {
+		decoder := gob.NewDecoder(file)
+		err = decoder.Decode(object)
+	}
+	file.Close()
+	return err
 }
