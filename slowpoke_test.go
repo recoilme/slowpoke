@@ -180,6 +180,14 @@ func TestKeys(t *testing.T) {
 		t.Error()
 	}
 
+	log("prefix")
+	s = ""
+	pref, err := Keys(f, []byte("2*"), 0, 0, false)
+	for _, r := range pref {
+		s += string(r)
+	}
+	log(s)
+
 }
 
 func TestAsyncKeys(t *testing.T) {

@@ -272,6 +272,8 @@ func (i1 *Cmd) Less(item btree.Item, ctx interface{}) bool {
 // if limit == 0 return all keys
 // Skip offset records count
 // If from not nil - return keys after from (from not included)
+// If last byte of from == "*" - use as prefix
+
 func Keys(file string, from []byte, limit, offset int, asc bool) ([][]byte, error) {
 	var keys = make([][]byte, 0, 0)
 	db, ok := dbs[file]
@@ -283,16 +285,36 @@ func Keys(file string, from []byte, limit, offset int, asc bool) ([][]byte, erro
 	defer db.Mux.RUnlock()
 
 	var counter int
+	var byPrefix bool
+	if from != nil {
+		lastByte := from[len(from)-1:]
+		if bytes.Equal([]byte("*"), lastByte) {
+			byPrefix = true
+
+		}
+	}
 	iterator := func(item btree.Item) bool {
 		kvi := item.(*Cmd)
 		//log(kvi)
 
 		if from != nil {
-			if bytes.Equal(kvi.Key, from) {
-				//found
-				from = nil
+			if !byPrefix {
+				if bytes.Equal(kvi.Key, from) {
+					//found
+					from = nil
+				}
+				return true
+			} else {
+				if len(kvi.Key) >= len(from)-1 {
+					//extract prefix and compare
+					//log(from[:len(from)-1])
+					if !bytes.Equal(kvi.Key[:len(from)-1], from[:len(from)-1]) {
+						return true
+					}
+				} else {
+					return true
+				}
 			}
-			return true
 		}
 		if counter < offset {
 			counter++
