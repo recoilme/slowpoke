@@ -42,7 +42,7 @@ vals: return values, default false
 curl -X POST localhost:5000/bolt/users
 return: {"user2","user1"}
 
-curl -X POST localhost:5000/bolt/users/First?cnt=2&order=asc
+curl -X POST localhost:5000/bolt/users/
 return: {"user1"}
 
 curl -X POST "http://localhost:5000/bolt/users/use*?order=asc&vals=true"
@@ -71,6 +71,7 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/recoilme/slowpoke"
 )
 
 var boltdb *bolt.DB
@@ -107,6 +108,7 @@ func Serve(addr string) {
 		if boltdb != nil {
 			boltdb.Close()
 		}
+		slowpoke.CloseAll()
 		os.Exit(0)
 	}()
 	http.ListenAndServe(addr, nil)
@@ -185,14 +187,20 @@ func parser(w http.ResponseWriter, r *http.Request) {
 		return
 	case "POST":
 		cnt := r.URL.Query().Get("cnt")
+		ofs := r.URL.Query().Get("offset")
 		var order = r.URL.Query().Get("order")
 		var max = 100000
+		var offset = 0
 		var vals = r.URL.Query().Get("vals")
 		m, e := strconv.Atoi(cnt)
 		if e == nil {
 			max = m
 		}
-		val, err := post(database, bucketstr, keystr, order, vals, max)
+		o, eo := strconv.Atoi(ofs)
+		if eo == nil {
+			offset = o
+		}
+		val, err := post(database, bucketstr, keystr, order, vals, max, offset)
 		if err != nil {
 			http.Error(w, err.Error(), 204)
 			return
@@ -205,7 +213,7 @@ func parser(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func post(database, bucketstr, keystr, order, vals string, max int) ([]byte, error) {
+func post(database, bucketstr, keystr, order, vals string, max, offset int) ([]byte, error) {
 	var err error
 	var buffer bytes.Buffer
 	switch database {
@@ -274,7 +282,28 @@ func post(database, bucketstr, keystr, order, vals string, max int) ([]byte, err
 
 			return nil
 		})
+	case "slowpoke":
+		var k []byte
+		var asc = true
+		if keystr != "Last" && keystr != "" && keystr != "First" {
+			k = []byte(keystr)
+		}
 
+		if order == "" || order == "desc" {
+			asc = false
+		}
+		vals, err := slowpoke.Keys(bucketstr, k, max, offset, asc)
+		if err == nil {
+			buffer.WriteString("[")
+			for i, val := range vals {
+				if i != 0 {
+					buffer.WriteString(",")
+				}
+				buffer.WriteString(fmt.Sprintf("\"%s\"", val))
+
+			}
+			buffer.WriteString("]")
+		}
 	}
 	return buffer.Bytes(), err
 }
@@ -291,6 +320,8 @@ func get(database, bucketstr, keystr string) []byte {
 			v = b.Get([]byte(keystr))
 			return nil
 		})
+	case "slowpoke":
+		v, _ = slowpoke.Get(bucketstr, []byte(keystr))
 	}
 	return v
 }
@@ -306,6 +337,8 @@ func put(database, bucketstr, keystr string, val []byte) (err error) {
 			e := b.Put([]byte(keystr), val)
 			return e
 		})
+	case "slowpoke":
+		return slowpoke.Set(bucketstr, []byte(keystr), val)
 	}
 	return err
 }
@@ -320,6 +353,8 @@ func delete(database, bucketstr, keystr string) (err error) {
 			}
 			return b.Delete([]byte(keystr))
 		})
+	case "slowpoke":
+		_, err = slowpoke.Delete(bucketstr, []byte(keystr))
 	}
 	return err
 }
