@@ -115,9 +115,9 @@ func writeKey(db *DB, key []byte, seek, size uint32) (err error) {
 
 // Set store val and key
 func Set(file string, key, val []byte) (err error) {
-	db, ok := dbs[file]
-	if !ok {
-		return ErrDbNotOpen
+	db, err := Open(file)
+	if err != nil {
+		return err
 	}
 	db.Mux.Lock()
 	defer db.Mux.Unlock()
@@ -143,27 +143,29 @@ func Close(file string) (err error) {
 }
 
 // Open create file (with dirs) or read keys to map
-func Open(file string) error {
-	_, ok := dbs[file]
+// Save for multiple open
+func Open(file string) (db *DB, err error) {
+	var ok bool
+	db, ok = dbs[file]
 	if ok {
-		return ErrDbOpened
+		return db, nil
 	}
 	exists, err := checkAndCreate(file)
 	if exists && err != nil {
-		return err
+		return nil, err
 	}
 	//files
 	fk, err := syncfile.NewSyncFile(file+".idx", FileMode)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	fv, err := syncfile.NewSyncFile(file, FileMode)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !exists {
 		//new DB
-		db := &DB{
+		db = &DB{
 			Btree: btree.New(16, nil),
 			Mux:   new(sync.RWMutex),
 			Fkey:  fk,
@@ -174,9 +176,9 @@ func Open(file string) error {
 		//read DB
 		tree, err := readTree(fk)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		db := &DB{
+		db = &DB{
 			Btree: tree,
 			Mux:   new(sync.RWMutex),
 			Fkey:  fk,
@@ -184,14 +186,14 @@ func Open(file string) error {
 		}
 		dbs[file] = db
 	}
-	return nil
+	return db, nil
 }
 
 // Delete remove key from tree and add record to log
 func Delete(file string, key []byte) (deleted bool, err error) {
-	db, ok := dbs[file]
-	if !ok {
-		return deleted, ErrDbNotOpen
+	db, err := Open(file)
+	if err != nil {
+		return deleted, err
 	}
 	db.Mux.Lock()
 	defer db.Mux.Unlock()
@@ -205,9 +207,9 @@ func Delete(file string, key []byte) (deleted bool, err error) {
 
 // Get return value by key or nil and error
 func Get(file string, key []byte) (val []byte, err error) {
-	db, ok := dbs[file]
-	if !ok {
-		return nil, ErrDbNotOpen
+	db, err := Open(file)
+	if err != nil {
+		return nil, err
 	}
 
 	db.Mux.RLock()
@@ -275,9 +277,9 @@ func (i1 *Cmd) Less(item btree.Item, ctx interface{}) bool {
 // If last byte of from == "*" - use as prefix
 func Keys(file string, from []byte, limit, offset int, asc bool) ([][]byte, error) {
 	var keys = make([][]byte, 0, 0)
-	db, ok := dbs[file]
-	if !ok {
-		return nil, ErrDbNotOpen
+	db, err := Open(file)
+	if err != nil {
+		return nil, err
 	}
 
 	db.Mux.RLock()
@@ -336,22 +338,10 @@ func Keys(file string, from []byte, limit, offset int, asc bool) ([][]byte, erro
 	return keys, nil
 }
 
-func writeGob(filePath string, object interface{}) error {
-	file, err := os.Create(filePath)
-	if err == nil {
-		encoder := gob.NewEncoder(file)
-		encoder.Encode(object)
+// Close all opened Db
+func CloseAll() (err error) {
+	for k, _ := range dbs {
+		err = Close(k)
 	}
-	file.Close()
-	return err
-}
-
-func readGob(filePath string, object interface{}) error {
-	file, err := os.Open(filePath)
-	if err == nil {
-		decoder := gob.NewDecoder(file)
-		err = decoder.Decode(object)
-	}
-	file.Close()
 	return err
 }

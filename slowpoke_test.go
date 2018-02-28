@@ -16,9 +16,11 @@ func ch(err error, t *testing.T) {
 
 func TestSet(t *testing.T) {
 	var err error
-	err = Open("1.db")
-	ch(err, t)
-	defer Close("1.db")
+	//_, err = Open("1.db")
+	//ch(err, t)
+	defer CloseAll()
+	val, err := Get("nodb.db", []byte("1"))
+	log(val)
 	err = Set("1.db", []byte("1"), []byte("11"))
 	ch(err, t)
 	err = Set("1.db", []byte("2"), []byte("22"))
@@ -104,7 +106,7 @@ func TestDelete(t *testing.T) {
 	var err error
 	f := "2.db"
 	os.Remove(f)
-	err = Open(f)
+	_, err = Open(f)
 	ch(err, t)
 	defer Close(f)
 	err = Set(f, []byte("1"), []byte("11"))
@@ -121,7 +123,7 @@ func TestDelete(t *testing.T) {
 	_, err = Get(f, []byte("2"))
 	log(err)
 	Close(f)
-	err = Open(f)
+	_, err = Open(f)
 	ch(err, t)
 	_, err = Get(f, []byte("2"))
 	log(err)
@@ -134,7 +136,7 @@ func TestKeys(t *testing.T) {
 	var err error
 	f := "keys.db"
 	os.Remove(f)
-	err = Open(f)
+	_, err = Open(f)
 	ch(err, t)
 	defer Close(f)
 	append := func(i int) {
@@ -196,7 +198,7 @@ func TestAsyncKeys(t *testing.T) {
 	var err error
 	f := "AsyncKeys.db"
 	os.Remove(f)
-	err = Open(f)
+	_, err = Open(f)
 	ch(err, t)
 	defer Close(f)
 	append := func(i int) {
