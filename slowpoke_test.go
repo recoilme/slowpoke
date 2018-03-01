@@ -252,7 +252,7 @@ func BenchmarkSlowSet(b *testing.B) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 100000; i++ {
 		k := []byte(fmt.Sprintf("%04d", i))
 		_ = Set(f, k, nil)
 	}
@@ -265,9 +265,9 @@ func TestFill(t *testing.T) {
 	f := "benchget.db"
 	os.Remove(f)
 	os.Remove(f + ".idx")
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 100000; i++ {
 		k := []byte(fmt.Sprintf("%04d", i))
-		_ = Set(f, k, k)
+		_ = Set(f, k, nil)
 	}
 }
 

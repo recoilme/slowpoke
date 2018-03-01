@@ -80,28 +80,36 @@ func checkAndCreate(path string) (bool, error) {
 func writeKey(db *DB, key []byte, seek, size uint32, t uint8) (err error) {
 	cmd := &Cmd{Type: t, Seek: seek, Size: size, Key: key}
 	//get buf from pool
+	//buf := new(bytes.Buffer)
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
-	//encode
-	encoder := gob.NewEncoder(buf)
-	encoder.Encode(cmd)
-	buf.Write(key)
-	//fmt.Println(buf.Len(), string(buf.Bytes()))
 
-	lenbuf := make([]byte, 4) //i hope its safe
-	binary.BigEndian.PutUint32(lenbuf, uint32(buf.Len()))
+	//encode
+	//encoder := gob.NewEncoder(buf)
+	//encoder.Encode(cmd)
+
+	binary.Write(buf, binary.BigEndian, uint32(9+len(key)))
+	binary.Write(buf, binary.BigEndian, t)    //1byte
+	binary.Write(buf, binary.BigEndian, seek) //4byte
+	binary.Write(buf, binary.BigEndian, size) //4
+	buf.Write(key)
+	//fmt.Println(buf.Len(), 9+len(key))
+
+	//lenbuf := make([]byte, 4) //i hope its safe
+	//binary.BigEndian.PutUint32(lenbuf, uint32(buf.Len()))
 
 	//write
+	//_, _, err = db.Fkey.Write(lenbuf)
+	//if err != nil {
+	//return err
+	//}
 
-	_, _, err = db.Fkey.Write(lenbuf)
-	if err != nil {
-		return err
-	}
 	_, _, err = db.Fkey.Write(buf.Bytes())
 	if err != nil {
 		return err
 	}
+
 	if t == 0 {
 		db.Btree.ReplaceOrInsert(cmd)
 	}
