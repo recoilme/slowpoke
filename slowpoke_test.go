@@ -2,6 +2,9 @@ package slowpoke
 
 import (
 	"fmt"
+	"log"
+	"time"
+
 	"os"
 	"strconv"
 	"sync"
@@ -20,7 +23,8 @@ func TestSet(t *testing.T) {
 	//ch(err, t)
 	defer CloseAll()
 	val, err := Get("nodb.db", []byte("1"))
-	log(val)
+	logg(val)
+
 	err = Set("1.db", []byte("1"), []byte("11"))
 	ch(err, t)
 	err = Set("1.db", []byte("2"), []byte("22"))
@@ -35,7 +39,7 @@ func TestGet(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	log("Get:" + string(res))
+	logg("Get:" + string(res))
 }
 
 func TestAsync(t *testing.T) {
@@ -114,21 +118,21 @@ func TestDelete(t *testing.T) {
 	err = Set(f, []byte("2"), []byte("22"))
 	ch(err, t)
 	res, err := Get(f, []byte("2"))
-	log(res)
+	logg(res)
 	deleted, err := Delete(f, []byte("2"))
-	log(deleted)
+	logg(deleted)
 	if !deleted {
 		t.Error("not deleted")
 	}
 	_, err = Get(f, []byte("2"))
-	log(err)
+	logg(err)
 	Close(f)
 	_, err = Open(f)
 	ch(err, t)
 	_, err = Get(f, []byte("2"))
-	log(err)
+	logg(err)
 	d, _ := Get(f, []byte("1"))
-	log(d)
+	logg(d)
 	Close(f)
 }
 
@@ -156,19 +160,19 @@ func TestKeys(t *testing.T) {
 	for _, r := range res {
 		s += string(r)
 	}
-	log(s)
+	logg(s)
 	s = ""
 	from, err := Keys(f, []byte("10"), 2, 0, true)
 	for _, r := range from {
 		s += string(r)
 	}
-	log(s)
+	logg(s)
 	s = ""
 	des, err := Keys(f, []byte("10"), 2, 2, false)
 	for _, r := range des {
 		s += string(r)
 	}
-	log(s)
+	logg(s)
 	if s != "0706" {
 		t.Error()
 	}
@@ -177,18 +181,18 @@ func TestKeys(t *testing.T) {
 	for _, r := range all {
 		s += string(r)
 	}
-	log(s)
+	logg(s)
 	if s != "2019181716151413121110090807060504030201" {
 		t.Error()
 	}
 
-	log("prefix")
+	logg("prefix")
 	s = ""
 	pref, err := Keys(f, []byte("2*"), 0, 0, false)
 	for _, r := range pref {
 		s += string(r)
 	}
-	log(s)
+	logg(s)
 	if s != "20" {
 		t.Error()
 	}
@@ -238,3 +242,62 @@ func TestAsyncKeys(t *testing.T) {
 
 	wg.Wait()
 }
+
+func BenchmarkSlowSet(b *testing.B) {
+	var err error
+	f := "benchset.db"
+	os.Remove(f)
+	os.Remove(f + ".idx")
+	_, err = Open(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for i := 0; i < 10000; i++ {
+		k := []byte(fmt.Sprintf("%04d", i))
+		_ = Set(f, k, nil)
+	}
+	Close(f)
+}
+
+//write key 14 sec - 7,8 Mb (encode 1.5 sec)
+//write val 6 sec - 490 kb
+func TestFill(t *testing.T) {
+	f := "benchget.db"
+	os.Remove(f)
+	os.Remove(f + ".idx")
+	for i := 0; i < 10000; i++ {
+		k := []byte(fmt.Sprintf("%04d", i))
+		_ = Set(f, k, k)
+	}
+}
+
+//10000:  BenchmarkSlowGet-4      2000000000               0.17 ns/op            0 B/op          0 allocs/op
+//100000: BenchmarkSlowGet-4             1           3451810753 ns/op        767972080 B/op  19725402 allocs/op
+
+func TestSlowGet(t *testing.T) {
+	//run go test -run=Fill
+	//go test -run=SlowGet  -bench=. -benchmem
+	f := "benchget.db"
+
+	t0 := time.Now()
+	Open(f)
+	t1 := time.Now()
+
+	for i := 0; i < 100000; i++ {
+		k := []byte(fmt.Sprintf("%04d", i))
+		v, _ := Get(f, k)
+		_ = v
+		//fmt.Println(string(v))
+	}
+	t2 := time.Now()
+	fmt.Printf("The Open took %v to run.\n", t1.Sub(t0))
+	fmt.Printf("The 100000 Get took %v to run.\n", t2.Sub(t1))
+	defer Close(f)
+}
+
+/*
+func BenchmarkSlowOpen(b *testing.B) {
+	f := "benchget.db"
+	Open(f)
+	Close(f)
+}*/

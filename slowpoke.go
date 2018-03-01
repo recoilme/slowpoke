@@ -52,7 +52,7 @@ type Cmd struct {
 	Size uint32
 }
 
-func log(i interface{}) {
+func logg(i interface{}) {
 	if !debug {
 		return
 	}
@@ -86,6 +86,7 @@ func writeKey(db *DB, key []byte, seek, size uint32, t uint8) (err error) {
 	//encode
 	encoder := gob.NewEncoder(buf)
 	encoder.Encode(cmd)
+	buf.Write(key)
 	//fmt.Println(buf.Len(), string(buf.Bytes()))
 
 	lenbuf := make([]byte, 4) //i hope its safe
@@ -151,6 +152,7 @@ func Open(file string) (db *DB, err error) {
 	if ok {
 		return db, nil
 	}
+
 	exists, err := checkAndCreate(file)
 	if exists && err != nil {
 		return nil, err
