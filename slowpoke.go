@@ -77,12 +77,7 @@ func checkAndCreate(path string) (bool, error) {
 	return false, err
 }
 
-func writeKey(db *DB, key []byte, seek, size uint32) (err error) {
-	var t uint8
-	if size == 0 && seek == 0 {
-		//delete
-		t = 1
-	}
+func writeKey(db *DB, key []byte, seek, size uint32, t uint8) (err error) {
 	cmd := &Cmd{Type: t, Seek: seek, Size: size, Key: key}
 	//get buf from pool
 	buf := bufPool.Get().(*bytes.Buffer)
@@ -121,12 +116,18 @@ func Set(file string, key, val []byte) (err error) {
 	}
 	db.Mux.Lock()
 	defer db.Mux.Unlock()
-	seek, writed, err := db.Fval.Write(val)
-	if err != nil {
-		return err
+
+	if val != nil {
+		seek, writed, err := db.Fval.Write(val)
+		if err != nil {
+			return err
+		}
+
+		err = writeKey(db, key, uint32(seek), uint32(writed), 0)
+	} else {
+		err = writeKey(db, key, uint32(0), uint32(0), 0)
 	}
 
-	err = writeKey(db, key, uint32(seek), uint32(writed))
 	return err
 }
 
@@ -201,7 +202,7 @@ func Delete(file string, key []byte) (deleted bool, err error) {
 	if res != nil {
 		deleted = true
 	}
-	err = writeKey(db, key, uint32(0), uint32(0))
+	err = writeKey(db, key, uint32(0), uint32(0), 1)
 	return deleted, err
 }
 
