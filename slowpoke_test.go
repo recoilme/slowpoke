@@ -254,12 +254,12 @@ func BenchmarkSlowSet(b *testing.B) {
 	}
 	for i := 0; i < 100000; i++ {
 		k := []byte(fmt.Sprintf("%04d", i))
-		_ = Set(f, k, nil)
+		_ = Set(f, k, k)
 	}
 	Close(f)
 }
 
-//write key 14 sec - 7,8 Mb (encode 1.5 sec)
+//write key 6 sec - 2 Mb//14 sec - 7,8 Mb (encode 1.5 sec)
 //write val 6 sec - 490 kb
 func TestFill(t *testing.T) {
 	f := "benchget.db"
@@ -267,7 +267,7 @@ func TestFill(t *testing.T) {
 	os.Remove(f + ".idx")
 	for i := 0; i < 100000; i++ {
 		k := []byte(fmt.Sprintf("%04d", i))
-		_ = Set(f, k, nil)
+		_ = Set(f, k, k)
 	}
 }
 

@@ -6,7 +6,6 @@ package slowpoke
 import (
 	"bytes"
 	"encoding/binary"
-	"encoding/gob"
 	"errors"
 	"fmt"
 	"os"
@@ -80,30 +79,19 @@ func checkAndCreate(path string) (bool, error) {
 func writeKey(db *DB, key []byte, seek, size uint32, t uint8) (err error) {
 	cmd := &Cmd{Type: t, Seek: seek, Size: size, Key: key}
 	//get buf from pool
-	//buf := new(bytes.Buffer)
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
+	buf.Grow(14 + len(key))
 
 	//encode
-	//encoder := gob.NewEncoder(buf)
-	//encoder.Encode(cmd)
-
-	binary.Write(buf, binary.BigEndian, uint32(9+len(key)))
-	binary.Write(buf, binary.BigEndian, t)    //1byte
-	binary.Write(buf, binary.BigEndian, seek) //4byte
-	binary.Write(buf, binary.BigEndian, size) //4
+	binary.Write(buf, binary.BigEndian, uint8(0)) //1byte
+	binary.Write(buf, binary.BigEndian, t)        //1byte
+	binary.Write(buf, binary.BigEndian, seek)     //4byte
+	binary.Write(buf, binary.BigEndian, size)     //4
+	binary.Write(buf, binary.BigEndian, uint32(time.Now().Unix()))
+	binary.Write(buf, binary.BigEndian, uint16(len(key)))
 	buf.Write(key)
-	//fmt.Println(buf.Len(), 9+len(key))
-
-	//lenbuf := make([]byte, 4) //i hope its safe
-	//binary.BigEndian.PutUint32(lenbuf, uint32(buf.Len()))
-
-	//write
-	//_, _, err = db.Fkey.Write(lenbuf)
-	//if err != nil {
-	//return err
-	//}
 
 	_, _, err = db.Fkey.Write(buf.Bytes())
 	if err != nil {
@@ -250,16 +238,21 @@ func readTree(f *syncfile.SyncFile) (*btree.BTree, error) {
 	buf.Write(b)
 
 	for buf.Len() > 0 {
+		ver := uint8(buf.Next(1)[0]) //format version
+		_ = ver
+		t := uint8(buf.Next(1)[0])
+		seek := binary.BigEndian.Uint32(buf.Next(4))
+		size := binary.BigEndian.Uint32(buf.Next(4))
+		ctime := buf.Next(4) //time
+		_ = ctime
+		sizeKey := int(binary.BigEndian.Uint16(buf.Next(2)))
+		key := buf.Next(sizeKey)
 
-		sb := buf.Next(4)
-		nextSize := int(binary.BigEndian.Uint32(sb))
-
-		b := buf.Next(nextSize)
-		decoder := gob.NewDecoder(bytes.NewReader(b))
-		var cmd = &Cmd{}
-		err = decoder.Decode(cmd)
-		if err != nil {
-			break
+		cmd := &Cmd{
+			Type: t,
+			Seek: seek,
+			Size: size,
+			Key:  key,
 		}
 		switch cmd.Type {
 		case 0:
@@ -267,7 +260,7 @@ func readTree(f *syncfile.SyncFile) (*btree.BTree, error) {
 		case 1:
 			btree.Delete(cmd)
 		}
-		//fmt.Printf("%s %+v\n", string(cmd.Key), cmd)
+		//fmt.Printf("%v %+v\n", string(cmd.Key), cmd)
 	}
 	//fmt.Printf(" %+v\n", dbs[file].Btree.Len())
 	return btree, err
