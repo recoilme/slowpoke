@@ -1,7 +1,7 @@
 **Description**
 
 Package slowpoke implements a low-level key/value store in pure Go.
-Keys stored in memory (BTree), Value stored on disk.
+Keys stored in memory (with persistance), values stored on disk.
 
 
 **Motivation**
