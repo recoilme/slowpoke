@@ -90,3 +90,67 @@ github.com/tidwall/btree - Btree
 **Status**
 
 i use it in production (master branch)
+
+
+**Async read example**
+
+```
+func TestAsyncKeys(t *testing.T) {
+	var err error
+	f := "AsyncKeys.db"
+	DeleteFile(f)
+	_, err = Open(f)
+	ch(err, t)
+	defer Close(f)
+	append := func(i int) {
+
+		k := []byte(fmt.Sprintf("%02d", i))
+		v := []byte("Val:" + strconv.Itoa(i))
+		err := Set(f, k, v)
+		ch(err, t)
+
+	}
+	for i := 1; i <= 20; i++ {
+		append(i)
+	}
+
+	readmessages := make(chan string)
+	var wg sync.WaitGroup
+
+	read := func(i int) {
+		defer wg.Done()
+		slice, _ := Keys(f, nil, 1, i-1, true)
+		var s = ""
+		for _, r := range slice {
+			s += string(r)
+		}
+		readmessages <- fmt.Sprintf("read N:%d  content:%s", i, s)
+	}
+
+	for i := 1; i <= 10; i++ {
+		wg.Add(1)
+		go read(i)
+	}
+	go func() {
+		for i := range readmessages {
+			fmt.Println(i)
+		}
+	}()
+
+	wg.Wait()
+}
+
+//output
+/*
+read N:5  content:05
+read N:4  content:04
+read N:9  content:09
+read N:10  content:10
+read N:2  content:02
+read N:3  content:03
+read N:8  content:08
+read N:6  content:06
+read N:1  content:01
+read N:7  content:07
+*/
+```
