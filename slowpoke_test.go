@@ -252,7 +252,7 @@ func BenchmarkSlowSet(b *testing.B) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	for i := 0; i < 100000; i++ {
+	for i := 0; i < 10000; i++ {
 		k := []byte(fmt.Sprintf("%04d", i))
 		_ = Set(f, k, k)
 	}
@@ -265,7 +265,7 @@ func TestFill(t *testing.T) {
 	f := "benchget.db"
 	os.Remove(f)
 	os.Remove(f + ".idx")
-	for i := 0; i < 100000; i++ {
+	for i := 0; i < 10000; i++ {
 		k := []byte(fmt.Sprintf("%04d", i))
 		_ = Set(f, k, k)
 	}
@@ -283,7 +283,7 @@ func TestSlowGet(t *testing.T) {
 	Open(f)
 	t1 := time.Now()
 
-	for i := 0; i < 100000; i++ {
+	for i := 0; i < 10000; i++ {
 		k := []byte(fmt.Sprintf("%04d", i))
 		v, _ := Get(f, k)
 		_ = v
@@ -291,6 +291,6 @@ func TestSlowGet(t *testing.T) {
 	}
 	t2 := time.Now()
 	fmt.Printf("The Open took %v to run.\n", t1.Sub(t0))
-	fmt.Printf("The 100000 Get took %v to run.\n", t2.Sub(t1))
+	fmt.Printf("The 10000 Get took %v to run.\n", t2.Sub(t1))
 	defer Close(f)
 }
