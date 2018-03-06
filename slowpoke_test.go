@@ -201,7 +201,7 @@ func TestKeys(t *testing.T) {
 func TestAsyncKeys(t *testing.T) {
 	var err error
 	f := "AsyncKeys.db"
-	os.Remove(f)
+	DeleteFile(f)
 	_, err = Open(f)
 	ch(err, t)
 	defer Close(f)
