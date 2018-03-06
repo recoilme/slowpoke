@@ -1,51 +1,90 @@
 **Description**
 
 Package slowpoke implements a low-level key/value store in pure Go.
-Keys stored in memory (BTree), Value stored on disk
-It uses locking for multiple readers and a single writer.
+Keys stored in memory (BTree), Value stored on disk.
 
 
-**Мотивация**
+**Motivation**
+
+Replace bolt.db with more simple and efficient engine: http://recoilmeblog.tggram.com/post/96
+
+**How it work**
+
+Design is very simple. Keys stored in Btree (memory and disk). Vals stored on disk only.
+
+No optimization for ssd/mmap etc. Just files. Just work.
 
 
-Простой, удобный в использовании, потокобезопасный сервер для хранения пар ключ/значение. 
+**Server**
 
-Почему просто не взять базу данных N?
+You may found simple http server here: https://github.com/recoilme/slowpoke/tree/master/simpleserver
 
-- Мне не нужна схема. Я хочу просто хранить бинарные данные 
+**Example**
 
-- Мне не нужна скорость. Скорость всегда достигается некой ценой, которую я не хочу платить.
+```
+// Create/open file 1.db.idx and store key: []byte("1")
+// Create/open file 1.db and store val: []byte("11")
+Set("1.db", []byte("1"), []byte("11"))
 
-- Мне жалко денег на SSD, SSD - дорогие
+// add key 2 and val 22
+err = Set("1.db", []byte("2"), []byte("22"))
 
-- BoltDb - с ростом размера бд начинает нещадно тормозить и насиловать диск на 100% 
+// get value fo key 2
+res, _ := Get("1.db", []byte("2"))
+logg(res)
 
-- Мне нравится Sophia Db - но я не хочу юзать CGo 
+// delete key 2
+Delete("1.db", []byte("2"))
 
-- У меня данные не влазят в память - прощай buntDb, memcache, redis
+// get first 10 keys in descending order 
+res, _ := Keys("1.db", nil, 0, 10, false)
+var s = ""
+for _, r := range res {
+  s += string(r)
+}
+logg(s)
 
-- Вот так и пришлось писать очередной велосипед(
+// Close all opened files
+CloseAll()
+```
 
-**Slowpoke**
+**Api**
+
+All methods are thread safe. See tests for examples.
 
 
-Почему Slowpoke? 
+Set - put or replace key/val. Keys stored in memory and in log file (*.idx). Values - on disk only.
+If val == nil - stored only keys. Usefull for indexing.
 
-- нет оптимизаций под SSD
-- нет mmap
-- нет LSM Tree/Compaction и пр.
-- скорость не является целью данной БД
 
-**Архитектура**
+Get - return value by key
 
-- В памяти лежит BTree с отсортированными ключами и адресами значений. 
-- Доступ к ключам возможен в прямом/обратном порядке 
-- В ключе лежит имя файла с данными, смещение в файле и Размер данных
-- В файл данных значения просто аппендятся (100 раз записать одно и то же - запишется 100 раз)
-- При апдейте - старое значение не стирается
 
-**TODO**
-- Упаковка модификаций
-- Протокол сервера http/2 - потому что он бинарный, быстрый, и совмещает в себе лучшее из обоих миров (Из коробки авторизация, двустороний обмен данными и тп)
-- protobuf? - потому что хранить данные я буду в бинарном формате, мне плевать на то как они выглядят, я не собираюсь читать байты глазками, но возможно дам рест апи с json интерфейсом для упырей.
-- Итого: grpc как технология для обмена данными - потому что мне лень писать парсер протокола для клиента/сервера - пусть за меня это делает google да еще и с портом под все языки.
+Keys - return keys
+// Keys return keys in asc/desc order (false - descending,true - ascending)
+// if limit == 0 return all keys
+// offset - skip count records
+// If from not nil - return keys after from (from not included)
+// If last byte of from == "*" - use as prefix
+
+
+Close - close file and remove keys from memory
+
+
+Open - (call automatically) - open/create file and read keys to memory
+
+
+CloseAll - close all opened files and remove keys from memory
+
+
+DeleteFile - remove files from disk
+
+
+**Used librarys**
+
+github.com/recoilme/syncfile - thread safe read write file
+github.com/tidwall/btree - Btree
+
+**Status**
+
+i use it in production (master branch)

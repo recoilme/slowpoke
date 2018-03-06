@@ -135,7 +135,7 @@ func Close(file string) (err error) {
 		return ErrDbNotOpen
 	}
 	err = db.Fkey.Close()
-	err = db.Fkey.Close()
+	err = db.Fval.Close()
 	delete(dbs, file)
 	return err
 }
@@ -347,5 +347,18 @@ func CloseAll() (err error) {
 	for k, _ := range dbs {
 		err = Close(k)
 	}
+	return err
+}
+
+// DeleteFile close file key and file val and delete db from map and disk
+func DeleteFile(file string) (err error) {
+	db, ok := dbs[file]
+	if ok {
+		err = db.Fkey.Close()
+		err = db.Fval.Close()
+		delete(dbs, file)
+	}
+	err = os.Remove(file)
+	err = os.Remove(file + ".idx")
 	return err
 }
