@@ -294,10 +294,3 @@ func TestSlowGet(t *testing.T) {
 	fmt.Printf("The 100000 Get took %v to run.\n", t2.Sub(t1))
 	defer Close(f)
 }
-
-/*
-func BenchmarkSlowOpen(b *testing.B) {
-	f := "benchget.db"
-	Open(f)
-	Close(f)
-}*/
