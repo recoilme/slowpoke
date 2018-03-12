@@ -17,7 +17,7 @@ func testSet() {
 	file := "1.db"
 	err := slowpoke.DeleteFile(file)
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
 	}
 	var wg sync.WaitGroup
 
