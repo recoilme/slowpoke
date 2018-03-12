@@ -84,3 +84,7 @@ func testSet() {
 //Macbook 2017
 //The 100 Set took 15.538641ms to run.
 //The 100 Get took 191.673µs to run.
+
+//Hetzner raid hdd
+//The 100 Set took 2.602835939s to run.
+//The 100 Get took 268.707µs to run.
