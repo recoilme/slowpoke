@@ -31,14 +31,14 @@ func testSet() {
 	}
 
 	t1 := time.Now()
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		append(i)
 	}
 	wg.Wait()
 	t2 := time.Now()
 
-	fmt.Printf("The 10000 Set took %v to run.\n", t2.Sub(t1))
+	fmt.Printf("The 100 Set took %v to run.\n", t2.Sub(t1))
 	slowpoke.CloseAll()
 }
 
