@@ -114,16 +114,36 @@ func Set(file string, key, val []byte) (err error) {
 	db.Mux.Lock()
 	defer db.Mux.Unlock()
 
+	var rewrite bool
+	var writeAtPos uint32
+	var seek int64
+	var writed int
+
 	if val != nil {
-		seek, writed, err := db.Fval.Write(val)
+		//check for exists
+		item := db.Btree.Get(&Cmd{Key: key})
+		if item != nil {
+
+			kv := item.(*Cmd)
+
+			if kv.Size >= uint32(len(val)) {
+				writeAtPos = kv.Seek
+				rewrite = true
+			}
+		}
+
+		if !rewrite {
+			seek, writed, err = db.Fval.Write(val)
+		} else {
+			//replace val
+			seek, writed, err = db.Fval.WriteAt(val, int64(writeAtPos))
+		}
 		if err != nil {
 			return err
 		}
-
-		err = writeKey(db, key, uint32(seek), uint32(writed), 0)
-	} else {
-		err = writeKey(db, key, uint32(0), uint32(0), 0)
 	}
+
+	err = writeKey(db, key, uint32(seek), uint32(writed), 0)
 
 	return err
 }

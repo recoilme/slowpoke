@@ -1,9 +1,8 @@
 package slowpoke
 
 import (
+	"bytes"
 	"fmt"
-	"log"
-	"time"
 
 	"os"
 	"strconv"
@@ -205,8 +204,9 @@ func TestAsyncKeys(t *testing.T) {
 	_, err = Open(f)
 	ch(err, t)
 	defer Close(f)
+	var wg sync.WaitGroup
 	append := func(i int) {
-
+		defer wg.Done()
 		k := []byte(fmt.Sprintf("%02d", i))
 		v := []byte("Val:" + strconv.Itoa(i))
 		err := Set(f, k, v)
@@ -214,11 +214,11 @@ func TestAsyncKeys(t *testing.T) {
 
 	}
 	for i := 1; i <= 20; i++ {
-		append(i)
+		wg.Add(1)
+		go append(i)
 	}
-
+	wg.Wait()
 	readmessages := make(chan string)
-	var wg sync.WaitGroup
 
 	read := func(i int) {
 		defer wg.Done()
@@ -243,54 +243,22 @@ func TestAsyncKeys(t *testing.T) {
 	wg.Wait()
 }
 
-func BenchmarkSlowSet(b *testing.B) {
+func TestRewriteVal(t *testing.T) {
 	var err error
-	f := "benchset.db"
-	os.Remove(f)
-	os.Remove(f + ".idx")
+	f := "rewrite.db"
+	DeleteFile(f)
 	_, err = Open(f)
-	if err != nil {
-		log.Fatal(err)
-	}
-	for i := 0; i < 10000; i++ {
-		k := []byte(fmt.Sprintf("%04d", i))
-		_ = Set(f, k, k)
-	}
-	Close(f)
-}
-
-//write key 6 sec - 2 Mb//14 sec - 7,8 Mb (encode 1.5 sec)
-//write val 6 sec - 490 kb
-func TestFill(t *testing.T) {
-	f := "benchget.db"
-	os.Remove(f)
-	os.Remove(f + ".idx")
-	for i := 0; i < 100; i++ {
-		k := []byte(fmt.Sprintf("%04d", i))
-		_ = Set(f, k, k)
-	}
-}
-
-//10000:  BenchmarkSlowGet-4      2000000000               0.17 ns/op            0 B/op          0 allocs/op
-//100000: BenchmarkSlowGet-4             1           3451810753 ns/op        767972080 B/op  19725402 allocs/op
-
-func TestSlowGet(t *testing.T) {
-	//run go test -run=Fill
-	//go test -run=SlowGet  -bench=. -benchmem
-	f := "benchget.db"
-
-	t0 := time.Now()
-	Open(f)
-	t1 := time.Now()
-
-	for i := 0; i < 10000; i++ {
-		k := []byte(fmt.Sprintf("%04d", i))
-		v, _ := Get(f, k)
-		_ = v
-		//fmt.Println(string(v))
-	}
-	t2 := time.Now()
-	fmt.Printf("The Open took %v to run.\n", t1.Sub(t0))
-	fmt.Printf("The 10000 Get took %v to run.\n", t2.Sub(t1))
+	ch(err, t)
 	defer Close(f)
+
+	ch(Set(f, []byte("key1"), []byte("val1")), t)
+	ch(Set(f, []byte("key1"), []byte("val2")), t)
+	ch(Set(f, []byte("key3"), []byte("val3")), t)
+	ch(Set(f, []byte("key1"), []byte("val0")), t)
+	ch(Set(f, []byte("key1"), []byte("val")), t)
+	v, _ := Get(f, []byte("key1"))
+	if !bytes.Equal([]byte("val"), v) {
+		fmt.Println(string(v))
+		t.Error("not equal")
+	}
 }
