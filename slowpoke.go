@@ -22,9 +22,12 @@ var (
 	filesFile = ""
 	dbs       = make(map[string]*DB)
 
+	// ErrKeyNotFound - key not found
 	ErrKeyNotFound = errors.New("Error: key not found")
-	ErrDbOpened    = errors.New("Error: db is opened")
-	ErrDbNotOpen   = errors.New("Error: db not open")
+	// ErrDbOpened - db is opened
+	ErrDbOpened = errors.New("Error: db is opened")
+	// ErrDbNotOpen - db not open
+	ErrDbNotOpen = errors.New("Error: db not open")
 
 	bufPool = &sync.Pool{
 		New: func() interface{} {
@@ -34,9 +37,11 @@ var (
 )
 
 const (
+	// FileMode - file will be created in this mode
 	FileMode = 0666
 )
 
+// DB struct with tree and files
 type DB struct {
 	Btree *btree.BTree
 	Fkey  *syncfile.SyncFile
@@ -44,6 +49,7 @@ type DB struct {
 	Mux   *sync.RWMutex
 }
 
+// Cmd - struct with commands
 type Cmd struct {
 	Type uint8
 	Key  []byte
@@ -325,6 +331,7 @@ func readTree(f *syncfile.SyncFile) (*btree.BTree, error) {
 	return btree, err
 }
 
+// Less - for btree Compare
 func (i1 *Cmd) Less(item btree.Item, ctx interface{}) bool {
 	i2 := item.(*Cmd)
 	if bytes.Compare(i1.Key, i2.Key) < 0 {
@@ -368,17 +375,17 @@ func Keys(file string, from []byte, limit, offset int, asc bool) ([][]byte, erro
 					from = nil
 				}
 				return true
-			} else {
-				if len(kvi.Key) >= len(from)-1 {
-					//extract prefix and compare
-					//log(from[:len(from)-1])
-					if !bytes.Equal(kvi.Key[:len(from)-1], from[:len(from)-1]) {
-						return true
-					}
-				} else {
+			}
+			if len(kvi.Key) >= len(from)-1 {
+				//extract prefix and compare
+				//log(from[:len(from)-1])
+				if !bytes.Equal(kvi.Key[:len(from)-1], from[:len(from)-1]) {
 					return true
 				}
+			} else {
+				return true
 			}
+
 		}
 		if counter < offset {
 			counter++
@@ -401,9 +408,9 @@ func Keys(file string, from []byte, limit, offset int, asc bool) ([][]byte, erro
 	return keys, nil
 }
 
-// Close all opened Db
+// CloseAll - close all opened Db
 func CloseAll() (err error) {
-	for k, _ := range dbs {
+	for k := range dbs {
 		err = Close(k)
 	}
 	return err

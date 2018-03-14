@@ -188,7 +188,7 @@ func TestKeys(t *testing.T) {
 
 	logg("prefix")
 	s = ""
-	pref, err := Keys(f, []byte("2*"), 0, 0, false)
+	pref, _ := Keys(f, []byte("2*"), 0, 0, false)
 	for _, r := range pref {
 		s += string(r)
 	}

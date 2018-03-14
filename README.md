@@ -1,14 +1,14 @@
 **Description**
 
-Package slowpoke implements a low-level key/value store on pure Go. Keys are stored in memory (with persistance), values stored on disk.
+Package slowpoke implements a low-level key/value store on pure Go. Keys are stored in memory (with persistence), values stored on disk.
 
 **Motivation**
 
 Replace bolt.db with more simple and efficient engine: http://recoilmeblog.tggram.com/post/96
 
-**How it work**
+**How it works**
 
-Design is very simple. Keys are stored in Btree (memory and disk). Values stored on disk only.
+The design is very simple. Keys are stored in Btree (memory and disk). Values stored on disk only.
 
 
 **Server**
@@ -50,7 +50,7 @@ All methods are thread safe. See tests for examples.
 
 
 Set - put or replace key/val. Keys stored in memory and in log file (*.idx). Values - on disk only.
-If val == nil - stored only keys. Usefull for indexing.
+If val == nil - stored only keys. Useful for indexing.
 
 
 Get - return value by key
@@ -77,15 +77,15 @@ CloseAll - close all opened files and remove keys from memory
 DeleteFile - remove files from disk
 
 
-**Used librarys**
+**Used libraries**
 
-github.com/recoilme/syncfile - thread safe read write file
+github.com/recoilme/syncfile - threadsafe read-write file
 
 github.com/tidwall/btree - Btree
 
 **Status**
 
-i use it in production (master branch)
+Used in production (master branch)
 
 
 **Async read example**
