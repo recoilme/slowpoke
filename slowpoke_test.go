@@ -177,7 +177,7 @@ func TestKeys(t *testing.T) {
 		t.Error()
 	}
 	s = ""
-	all, err := Keys(f, nil, 0, 0, false)
+	all, _ := Keys(f, nil, 0, 0, false)
 	for _, r := range all {
 		s += string(r)
 	}
