@@ -86,3 +86,5 @@ func testSet() {
 //Hetzner raid hdd slowpoke/bolt
 //The 100 Set took 7.057072837s to run./2.602835939s to run.
 //The 100 Get took 275.011µs to run./268.707µs to run.
+//The 100 Sets took 53.058325ms to run./-
+//The 100 Keys took 16.072µs to run./-

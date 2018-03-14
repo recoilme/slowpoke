@@ -158,11 +158,15 @@ read N:7  content:07
 **Benchmark**
 
 ```
-//macbook 2017 ssd slowpoke/bolt
+//macbook 2017 slowpoke/bolt
 //The 100 Set took 13.270801ms to run./15.538641ms
-//The 100 Get took 279.128µs to run./191.673µs to run.
+//The 100 Get took 279.128µs to run./191.673µs
+//The 100 Sets took 1.124931ms to run./-
+//The 100 Keys took 8.583µs to run./-
 
-//Hetzner raid slow hdd slowpoke/bolt
+//Hetzner raid hdd slowpoke/bolt
 //The 100 Set took 7.057072837s to run./2.602835939s to run.
 //The 100 Get took 275.011µs to run./268.707µs to run.
+//The 100 Sets took 53.058325ms to run./-
+//The 100 Keys took 16.072µs to run./-
 ```
