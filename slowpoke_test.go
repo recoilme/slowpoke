@@ -2,6 +2,7 @@ package slowpoke
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 
 	"os"
@@ -261,4 +262,38 @@ func TestRewriteVal(t *testing.T) {
 		fmt.Println(string(v))
 		t.Error("not equal")
 	}
+}
+
+func variadic(a ...[]byte) {
+	fmt.Println("len:", len(a))
+	for i := range a {
+		if i%2 != 0 {
+			fmt.Println(a[i-1], a[i])
+		}
+	}
+}
+
+func TestSets(t *testing.T) {
+	var err error
+	f := "rewrite.db"
+	DeleteFile(f)
+	_, err = Open(f)
+	ch(err, t)
+
+	var a [][]byte
+	for i := 0; i < 10; i++ {
+		bs := make([]byte, 4)
+		binary.BigEndian.PutUint32(bs, uint32(i))
+		a = append(a, bs)
+		a = append(a, bs)
+	}
+	Sets(f, a...)
+	Close(f)
+	keys, _ := Keys(f, nil, 5, 0, false)
+	logg(keys)
+	for _, key := range keys {
+		v, _ := Get(f, key)
+		logg(v)
+	}
+	Close(f)
 }

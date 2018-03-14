@@ -76,7 +76,7 @@ func checkAndCreate(path string) (bool, error) {
 	return false, err
 }
 
-func writeKey(db *DB, key []byte, seek, size uint32, t uint8) (err error) {
+func writeKey(db *DB, key []byte, seek, size uint32, t uint8, sync bool) (err error) {
 	cmd := &Cmd{Type: t, Seek: seek, Size: size, Key: key}
 	//get buf from pool
 	buf := bufPool.Get().(*bytes.Buffer)
@@ -93,7 +93,12 @@ func writeKey(db *DB, key []byte, seek, size uint32, t uint8) (err error) {
 	binary.Write(buf, binary.BigEndian, uint16(len(key)))
 	buf.Write(key)
 
-	_, _, err = db.Fkey.Write(buf.Bytes())
+	if sync {
+		_, _, err = db.Fkey.Write(buf.Bytes())
+	} else {
+		_, _, err = db.Fkey.WriteNoSync(buf.Bytes())
+	}
+
 	if err != nil {
 		return err
 	}
@@ -105,7 +110,41 @@ func writeKey(db *DB, key []byte, seek, size uint32, t uint8) (err error) {
 	return err
 }
 
+// Sets store vals and keys like bulk insert
+// Fsync will called only twice at end of insertion
+func Sets(file string, pairs ...[]byte) (err error) {
+	db, err := Open(file)
+	if err != nil {
+		return err
+	}
+	db.Mux.Lock()
+	defer db.Mux.Unlock()
+
+	for i := range pairs {
+		if i%2 != 0 {
+			// on even - append val and store key
+			if pairs[i] == nil || pairs[i-1] == nil {
+				break
+			}
+			seek, writed, err := db.Fval.WriteNoSync(pairs[i])
+			if err != nil {
+				break
+			}
+			err = writeKey(db, pairs[i-1], uint32(seek), uint32(writed), 0, false)
+			if err != nil {
+				break
+			}
+		}
+	}
+	// try sync at the end
+	err = db.Fval.Sync()
+	err = db.Fkey.Sync()
+	return err
+}
+
 // Set store val and key
+// If key exists and has same or more size - value will be overwriten, else - appended
+// If err on insert val - key not inserted
 func Set(file string, key, val []byte) (err error) {
 	db, err := Open(file)
 	if err != nil {
@@ -143,7 +182,7 @@ func Set(file string, key, val []byte) (err error) {
 		}
 	}
 
-	err = writeKey(db, key, uint32(seek), uint32(writed), 0)
+	err = writeKey(db, key, uint32(seek), uint32(writed), 0, true)
 
 	return err
 }
@@ -220,7 +259,7 @@ func Delete(file string, key []byte) (deleted bool, err error) {
 	if res != nil {
 		deleted = true
 	}
-	err = writeKey(db, key, uint32(0), uint32(0), 1)
+	err = writeKey(db, key, uint32(0), uint32(0), 1, true)
 	return deleted, err
 }
 

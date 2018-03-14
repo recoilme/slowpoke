@@ -21,7 +21,7 @@ func testSet() {
 	}
 	var wg sync.WaitGroup
 
-	append := func(i int) {
+	appendd := func(i int) {
 		defer wg.Done()
 		k := []byte(fmt.Sprintf("%04d", i))
 		err := slowpoke.Set(file, k, k)
@@ -33,7 +33,7 @@ func testSet() {
 	t1 := time.Now()
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
-		append(i)
+		appendd(i)
 	}
 	wg.Wait()
 	t2 := time.Now()
@@ -58,12 +58,30 @@ func testSet() {
 
 	fmt.Printf("The 100 Get took %v to run.\n", t4.Sub(t3))
 
+	//Sets
+	var pairs [][]byte
+	for i := 0; i < 100; i++ {
+		k := []byte(fmt.Sprintf("%04d", i))
+		pairs = append(pairs, k)
+		pairs = append(pairs, k)
+	}
+	t5 := time.Now()
+	slowpoke.Sets(file, pairs...)
+	t6 := time.Now()
+	fmt.Printf("The 100 Sets took %v to run.\n", t6.Sub(t5))
+
+	t7 := time.Now()
+	slowpoke.Keys(file, nil, 0, 0, true)
+	t8 := time.Now()
+	fmt.Printf("The 100 Keys took %v to run.\n", t8.Sub(t7))
 	slowpoke.CloseAll()
 }
 
 //macbook 2017 slowpoke/bolt
 //The 100 Set took 13.270801ms to run./15.538641ms
-//The 100 Get took 279.128µs to run./191.673µs to run.
+//The 100 Get took 279.128µs to run./191.673µs
+//The 100 Sets took 1.124931ms to run./-
+//The 100 Keys took 8.583µs to run./-
 
 //Hetzner raid hdd slowpoke/bolt
 //The 100 Set took 7.057072837s to run./2.602835939s to run.
