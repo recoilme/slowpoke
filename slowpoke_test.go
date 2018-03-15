@@ -33,13 +33,25 @@ func TestSet(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	Open("1.db")
-	defer Close("1.db")
-	res, err := Get("1.db", []byte("2"))
+	defer CloseAll()
+	//DeleteFile("1.db")
+	//Set("1.db", []byte("1"), []byte("11"))
+	//Set("1.db", []byte("2"), []byte("22"))
+	res, err := Get("1.db", []byte("1"))
 	if err != nil {
 		t.Error(err)
 	}
 	logg("Get:" + string(res))
+	res2, err2 := Get("1.db", []byte("2"))
+	if err2 != nil {
+		t.Error(err2)
+	}
+	logg("Get:" + string(res2))
+	keys, err := Keys("1.db", nil, 0, 0, true)
+	ch(err, t)
+
+	result := Gets("1.db", keys)
+	logg(result)
 }
 
 func TestAsync(t *testing.T) {
@@ -273,7 +285,7 @@ func variadic(a ...[]byte) {
 	}
 }
 
-func TestSets(t *testing.T) {
+func TestSes(t *testing.T) {
 	var err error
 	f := "rewrite.db"
 	DeleteFile(f)

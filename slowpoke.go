@@ -170,7 +170,6 @@ func Set(file string, key, val []byte) (err error) {
 		if item != nil {
 
 			kv := item.(*Cmd)
-
 			if kv.Size >= uint32(len(val)) {
 				writeAtPos = kv.Seek
 				rewrite = true
@@ -325,7 +324,7 @@ func readTree(f *syncfile.SyncFile) (*btree.BTree, error) {
 		case 1:
 			btree.Delete(cmd)
 		}
-		//fmt.Printf("%v %+v\n", string(cmd.Key), cmd)
+		//logg(cmd)
 	}
 	//fmt.Printf(" %+v\n", dbs[file].Btree.Len())
 	return btree, err
@@ -427,4 +426,26 @@ func DeleteFile(file string) (err error) {
 	err = os.Remove(file)
 	err = os.Remove(file + ".idx")
 	return err
+}
+
+// Gets return key/value pairs
+func Gets(file string, keys [][]byte) (result [][]byte) {
+	var wg sync.WaitGroup
+
+	read := func(k []byte) {
+		defer wg.Done()
+		val, err := Get(file, k)
+		if err == nil {
+			result = append(result, k)
+			result = append(result, val)
+		}
+	}
+
+	wg.Add(len(keys))
+	for _, key := range keys {
+		go read(key)
+	}
+	wg.Wait()
+
+	return result
 }
