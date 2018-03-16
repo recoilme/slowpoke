@@ -292,17 +292,36 @@ func post(database, bucketstr, keystr, order, vals string, max, offset int) ([]b
 		if order == "" || order == "desc" {
 			asc = false
 		}
-		vals, err := slowpoke.Keys(bucketstr, k, max, offset, asc)
-		if err == nil {
+		keys, err := slowpoke.Keys(bucketstr, k, max, offset, asc)
+		if vals == "true" {
+			pairs := slowpoke.Gets(bucketstr, keys)
 			buffer.WriteString("[")
-			for i, val := range vals {
-				if i != 0 {
-					buffer.WriteString(",")
+			for i, val := range pairs {
+				if i%2 == 0 {
+					//key
+					if i != 0 {
+						buffer.WriteString(",")
+					}
+					buffer.WriteString(fmt.Sprintf("{\"%s\":", val))
+				} else {
+					//val
+					buffer.WriteString(fmt.Sprintf("%s}", val))
 				}
-				buffer.WriteString(fmt.Sprintf("\"%s\"", val))
 
 			}
 			buffer.WriteString("]")
+		} else {
+			if err == nil {
+				buffer.WriteString("[")
+				for i, val := range keys {
+					if i != 0 {
+						buffer.WriteString(",")
+					}
+					buffer.WriteString(fmt.Sprintf("\"%s\"", val))
+
+				}
+				buffer.WriteString("]")
+			}
 		}
 	}
 	return buffer.Bytes(), err
