@@ -235,7 +235,7 @@ func TestAsyncKeys(t *testing.T) {
 
 	read := func(i int) {
 		defer wg.Done()
-		slice, _ := Keys(f, nil, 1, i-1, true)
+		slice, _ := Keys(f, nil, uint32(1), uint32(i-1), true)
 		var s = ""
 		for _, r := range slice {
 			s += string(r)
@@ -299,7 +299,7 @@ func TestSes(t *testing.T) {
 		a = append(a, bs)
 		a = append(a, bs)
 	}
-	Sets(f, a...)
+	Sets(f, a)
 	Close(f)
 	keys, _ := Keys(f, nil, 5, 0, false)
 	logg(keys)

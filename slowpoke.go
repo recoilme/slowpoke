@@ -118,7 +118,7 @@ func writeKey(db *DB, key []byte, seek, size uint32, t uint8, sync bool) (err er
 
 // Sets store vals and keys like bulk insert
 // Fsync will called only twice at end of insertion
-func Sets(file string, pairs ...[]byte) (err error) {
+func Sets(file string, pairs [][]byte) (err error) {
 	db, err := Open(file)
 	if err != nil {
 		return err
@@ -344,7 +344,7 @@ func (i1 *Cmd) Less(item btree.Item, ctx interface{}) bool {
 // offset - skip count records
 // If from not nil - return keys after from (from not included)
 // If last byte of from == "*" - use as prefix
-func Keys(file string, from []byte, limit, offset int, asc bool) ([][]byte, error) {
+func Keys(file string, from []byte, limit, offset uint32, asc bool) ([][]byte, error) {
 	var keys = make([][]byte, 0, 0)
 	db, err := Open(file)
 	if err != nil {
@@ -354,7 +354,7 @@ func Keys(file string, from []byte, limit, offset int, asc bool) ([][]byte, erro
 	db.Mux.RLock()
 	defer db.Mux.RUnlock()
 
-	var counter int
+	var counter uint32
 	var byPrefix bool
 	if from != nil {
 		lastByte := from[len(from)-1:]
