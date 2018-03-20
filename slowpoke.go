@@ -431,13 +431,16 @@ func DeleteFile(file string) (err error) {
 // Gets return key/value pairs
 func Gets(file string, keys [][]byte) (result [][]byte) {
 	var wg sync.WaitGroup
+	var mutex = &sync.Mutex{}
 
 	read := func(k []byte) {
 		defer wg.Done()
 		val, err := Get(file, k)
 		if err == nil {
+			mutex.Lock()
 			result = append(result, k)
 			result = append(result, val)
+			mutex.Unlock()
 		}
 	}
 
@@ -446,6 +449,5 @@ func Gets(file string, keys [][]byte) (result [][]byte) {
 		go read(key)
 	}
 	wg.Wait()
-
 	return result
 }

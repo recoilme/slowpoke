@@ -301,11 +301,16 @@ func TestSes(t *testing.T) {
 	}
 	Sets(f, a)
 	Close(f)
+
 	keys, _ := Keys(f, nil, 5, 0, false)
 	logg(keys)
 	for _, key := range keys {
 		v, _ := Get(f, key)
 		logg(v)
 	}
+
+	//for j := 1; j < 3; j++ {
+	//Keys(f, nil, uint32(j), uint32(j), false)
+	//}
 	Close(f)
 }

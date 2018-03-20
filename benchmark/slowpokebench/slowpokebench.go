@@ -66,7 +66,7 @@ func testSet() {
 		pairs = append(pairs, k)
 	}
 	t5 := time.Now()
-	slowpoke.Sets(file, pairs...)
+	slowpoke.Sets(file, pairs)
 	t6 := time.Now()
 	fmt.Printf("The 100 Sets took %v to run.\n", t6.Sub(t5))
 
