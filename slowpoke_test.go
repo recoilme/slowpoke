@@ -314,3 +314,44 @@ func TestSes(t *testing.T) {
 	//}
 	Close(f)
 }
+
+func TestRewriteKey(t *testing.T) {
+	//var err error
+	f := "rewrite.db"
+	SetDebug(false)
+	DeleteFile(f)
+
+	key := []byte("key")
+	for i := 0; i < 2; i++ {
+		bs := make([]byte, 4)
+		binary.BigEndian.PutUint32(bs, uint32(i))
+		_ = key
+		Set(f, key, bs)
+	}
+	//ch(Close(f), t)
+	//_, err = Open(f)
+	//ch(err, t)
+	SetDebug(true)
+	keys1, _ := Keys(f, nil, 0, 0, true)
+	logg("logg(keys1)")
+	logg(keys1)
+
+	for i := 100; i < 101; i++ {
+		bs := make([]byte, 4)
+		binary.BigEndian.PutUint32(bs, uint32(100))
+		Set(f, []byte("val"), bs)
+	}
+
+	keys2, _ := Keys(f, nil, 0, 0, true)
+	logg(keys2)
+	Close(f)
+	//Set(f, []byte("val"), []byte("val2"))
+	//Open(f)
+
+	/*keys3, _ := Keys(f, nil, 0, 0, true)
+	for _, v := range keys3 {
+		logg(string(v))
+	}
+	logg(keys3)
+	Close(f)*/
+}

@@ -13,14 +13,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/btree"
 	"github.com/recoilme/syncfile"
-	"github.com/tidwall/btree"
 )
 
 var (
-	debug     = true
-	filesFile = ""
-	dbs       = make(map[string]*DB)
+	debug = true
+	dbs   = make(map[string]*DB)
 
 	// ErrKeyNotFound - key not found
 	ErrKeyNotFound = errors.New("Error: key not found")
@@ -34,6 +33,8 @@ var (
 			return new(bytes.Buffer)
 		},
 	}
+
+	mutex = &sync.Mutex{}
 )
 
 const (
@@ -51,10 +52,11 @@ type DB struct {
 
 // Cmd - struct with commands
 type Cmd struct {
-	Type uint8
-	Key  []byte
-	Seek uint32
-	Size uint32
+	Type    uint8
+	Key     []byte
+	Seek    uint32
+	Size    uint32
+	SeekKey uint32
 }
 
 func logg(i interface{}) {
@@ -82,27 +84,47 @@ func checkAndCreate(path string) (bool, error) {
 	return false, err
 }
 
-func writeKey(db *DB, key []byte, seek, size uint32, t uint8, sync bool) (err error) {
-	cmd := &Cmd{Type: t, Seek: seek, Size: size, Key: key}
+func writeKey(db DB, key []byte, seek, size uint32, t uint8, sync bool, seekKey int64) (err error) {
+
+	logg(1)
+	bs := make([]byte, len(key))
+	copy(bs, key)
+	logg(bs)
+	c := &Cmd{Key: []byte("key")}
+	logg(db.Btree.Has(c))
+	printTree(db.Btree)
 	//get buf from pool
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
-	buf.Grow(14 + len(key))
+	buf.Grow(16 + len(key))
 
 	//encode
 	binary.Write(buf, binary.BigEndian, uint8(0)) //1byte
 	binary.Write(buf, binary.BigEndian, t)        //1byte
 	binary.Write(buf, binary.BigEndian, seek)     //4byte
 	binary.Write(buf, binary.BigEndian, size)     //4
-	binary.Write(buf, binary.BigEndian, uint32(time.Now().Unix()))
-	binary.Write(buf, binary.BigEndian, uint16(len(key)))
-	buf.Write(key)
 
+	binary.Write(buf, binary.BigEndian, uint32(time.Now().Unix()))
+	logg(db.Btree.Has(c))
+	binary.Write(buf, binary.BigEndian, uint16(len(key)))
+	logg(db.Btree.Has(c))
+	printTree(db.Btree)
+	buf.Write(key)
+	logg(db.Btree.Has(c))
+	logg(2)
+
+	logg(3)
+	var keyOffset int64
 	if sync {
-		_, _, err = db.Fkey.Write(buf.Bytes())
+		if seekKey == -1 {
+			keyOffset, _, err = db.Fkey.Write(buf.Bytes())
+		} else {
+			keyOffset, _, err = db.Fkey.WriteAt(buf.Bytes(), seekKey)
+		}
+
 	} else {
-		_, _, err = db.Fkey.WriteNoSync(buf.Bytes())
+		keyOffset, _, err = db.Fkey.WriteNoSync(buf.Bytes())
 	}
 
 	if err != nil {
@@ -110,7 +132,15 @@ func writeKey(db *DB, key []byte, seek, size uint32, t uint8, sync bool) (err er
 	}
 
 	if t == 0 {
+		//printTree(db.Btree)
+		cmd := &Cmd{Type: t, Seek: seek, Size: size, Key: bs, SeekKey: uint32(keyOffset)}
+		logg(4)
+
+		logg(db.Btree.Has(c))
 		db.Btree.ReplaceOrInsert(cmd)
+		logg("cmd")
+		logg(cmd)
+		printTree(db.Btree)
 	}
 
 	return err
@@ -136,7 +166,7 @@ func Sets(file string, pairs [][]byte) (err error) {
 			if err != nil {
 				break
 			}
-			err = writeKey(db, pairs[i-1], uint32(seek), uint32(writed), 0, false)
+			err = writeKey(*db, pairs[i-1], uint32(seek), uint32(writed), 0, false, -1)
 			if err != nil {
 				break
 			}
@@ -156,6 +186,7 @@ func Set(file string, key, val []byte) (err error) {
 	if err != nil {
 		return err
 	}
+
 	db.Mux.Lock()
 	defer db.Mux.Unlock()
 
@@ -163,17 +194,23 @@ func Set(file string, key, val []byte) (err error) {
 	var writeAtPos uint32
 	var seek int64
 	var writed int
+	var kv *Cmd
+	var seekKey int64
+
+	seekKey = -1
+	//check for exists
+	item := db.Btree.Get(&Cmd{Key: key})
+	kv = &Cmd{}
+	if item != nil {
+		kv = item.(*Cmd)
+		seekKey = int64(kv.SeekKey)
+	}
 
 	if val != nil {
-		//check for exists
-		item := db.Btree.Get(&Cmd{Key: key})
-		if item != nil {
 
-			kv := item.(*Cmd)
-			if kv.Size >= uint32(len(val)) {
-				writeAtPos = kv.Seek
-				rewrite = true
-			}
+		if kv.Size >= uint32(len(val)) {
+			writeAtPos = kv.Seek
+			rewrite = true
 		}
 
 		if !rewrite {
@@ -186,8 +223,8 @@ func Set(file string, key, val []byte) (err error) {
 			return err
 		}
 	}
-
-	err = writeKey(db, key, uint32(seek), uint32(writed), 0, true)
+	//printTree(db.Btree)
+	err = writeKey(*db, key, uint32(seek), uint32(writed), 0, true, seekKey)
 
 	return err
 }
@@ -200,6 +237,7 @@ func Close(file string) (err error) {
 	}
 	err = db.Fkey.Close()
 	err = db.Fval.Close()
+	db.Btree = nil //not needed?
 	delete(dbs, file)
 	return err
 }
@@ -207,6 +245,7 @@ func Close(file string) (err error) {
 // Open create file (with dirs) or read keys to map
 // Save for multiple open
 func Open(file string) (db *DB, err error) {
+
 	var ok bool
 	db, ok = dbs[file]
 	if ok {
@@ -229,7 +268,7 @@ func Open(file string) (db *DB, err error) {
 	if !exists {
 		//new DB
 		db = &DB{
-			Btree: btree.New(16, nil),
+			Btree: btree.New(16),
 			Mux:   new(sync.RWMutex),
 			Fkey:  fk,
 			Fval:  fv,
@@ -264,7 +303,7 @@ func Delete(file string, key []byte) (deleted bool, err error) {
 	if res != nil {
 		deleted = true
 	}
-	err = writeKey(db, key, uint32(0), uint32(0), 1, true)
+	err = writeKey(*db, key, uint32(0), uint32(0), 1, true, -1)
 	return deleted, err
 }
 
@@ -287,8 +326,11 @@ func Get(file string, key []byte) (val []byte, err error) {
 
 func readTree(f *syncfile.SyncFile) (*btree.BTree, error) {
 	//log("readtree")
-	var btree = btree.New(16, nil)
-
+	mutex.Lock()
+	defer mutex.Unlock()
+	var btree = btree.New(16)
+	var seekKey uint32
+	seekKey = 0
 	//get buf from pool
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
@@ -298,7 +340,6 @@ func readTree(f *syncfile.SyncFile) (*btree.BTree, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	buf.Write(b)
 
 	for buf.Len() > 0 {
@@ -313,25 +354,27 @@ func readTree(f *syncfile.SyncFile) (*btree.BTree, error) {
 		key := buf.Next(sizeKey)
 
 		cmd := &Cmd{
-			Type: t,
-			Seek: seek,
-			Size: size,
-			Key:  key,
+			Type:    t,
+			Seek:    seek,
+			Size:    size,
+			Key:     key,
+			SeekKey: seekKey,
 		}
+		seekKey += uint32(16 + sizeKey)
 		switch cmd.Type {
 		case 0:
 			btree.ReplaceOrInsert(cmd)
 		case 1:
 			btree.Delete(cmd)
 		}
-		//logg(cmd)
 	}
 	//fmt.Printf(" %+v\n", dbs[file].Btree.Len())
+	printTree(btree)
 	return btree, err
 }
 
 // Less - for btree Compare
-func (i1 *Cmd) Less(item btree.Item, ctx interface{}) bool {
+func (i1 *Cmd) Less(item btree.Item) bool {
 	i2 := item.(*Cmd)
 	if bytes.Compare(i1.Key, i2.Key) < 0 {
 		return true
@@ -365,7 +408,6 @@ func Keys(file string, from []byte, limit, offset uint32, asc bool) ([][]byte, e
 	}
 	iterator := func(item btree.Item) bool {
 		kvi := item.(*Cmd)
-		//log(kvi)
 
 		if from != nil {
 			if !byPrefix {
@@ -450,4 +492,21 @@ func Gets(file string, keys [][]byte) (result [][]byte) {
 	}
 	wg.Wait()
 	return result
+}
+
+func printTree(tree *btree.BTree) {
+	mutex.Lock()
+	defer mutex.Unlock()
+	fmt.Println("printTree")
+	iterator := func(item btree.Item) bool {
+		kvi := item.(*Cmd)
+		fmt.Println(string(kvi.Key))
+		return true
+	}
+	tree.Ascend(iterator)
+	fmt.Println("EndPrintTree")
+}
+
+func SetDebug(deb bool) {
+	debug = deb
 }
