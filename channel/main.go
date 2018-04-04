@@ -3,11 +3,20 @@ package chandict
 import (
 	"bytes"
 	"context"
+	"errors"
 	"runtime"
 	"sync"
 )
 
-var stores sync.Map
+var (
+	stores sync.Map
+	// ErrKeyNotFound - key not found
+	ErrKeyNotFound = errors.New("Error: key not found")
+	// ErrDbOpened - db is opened
+	ErrDbOpened = errors.New("Error: db is opened")
+	// ErrDbNotOpen - db not open
+	ErrDbNotOpen = errors.New("Error: db not open")
+)
 
 type readRequestResponse struct {
 	val    []byte
@@ -201,4 +210,63 @@ func Keys(file string) ([][]byte, error) {
 	}
 	val := db.ReadKeys()
 	return val, err
+}
+
+// Close close file key and file val and delete db from map
+func Close(file string) (err error) {
+	_, ok := stores.Load(file)
+	if !ok {
+		return ErrDbNotOpen
+	}
+	//err = db.Fkey.Close()
+	//err = db.Fval.Close()
+	//delete(dbs, file)
+	stores.Delete(file)
+	return err
+}
+
+// CloseAll - close all opened Db
+func CloseAll() (err error) {
+
+	stores.Range(func(k, v interface{}) bool {
+		err = Close(k.(string))
+		if err != nil {
+			return false
+		}
+		return true // if false, Range stops
+	})
+
+	return err
+}
+
+// DeleteFile close file key and file val and delete db from map and disk
+func DeleteFile(file string) (err error) {
+	stores.Delete(file)
+	//err = os.Remove(file)
+	//err = os.Remove(file + ".idx")*/
+	return err
+}
+
+// Gets return key/value pairs
+func Gets(file string, keys [][]byte) (result [][]byte) {
+	var wg sync.WaitGroup
+	var mutex = &sync.Mutex{}
+
+	read := func(k []byte) {
+		defer wg.Done()
+		val, err := Get(file, k)
+		if err == nil {
+			mutex.Lock()
+			result = append(result, k)
+			result = append(result, val)
+			mutex.Unlock()
+		}
+	}
+
+	wg.Add(len(keys))
+	for _, key := range keys {
+		go read(key)
+	}
+	wg.Wait()
+	return result
 }
