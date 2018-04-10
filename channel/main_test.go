@@ -1,20 +1,89 @@
 package chandict
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
+	"os"
+	"runtime"
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 )
 
+func logg(i interface{}) {
+
+	t := time.Now()
+	fmt.Printf("%02d.%02d.%04d %02d:%02d:%02d\t%v\n",
+		t.Day(), t.Month(), t.Year(),
+		t.Hour(), t.Minute(), t.Second(), i)
+}
+
+func ch(err error, t *testing.T) {
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func TestBase(t *testing.T) {
+	var err error
+	var b []byte
+	f := "1.db"
+	DeleteFile(f)
+	key := []byte("1")
+	err = Set(f, key, key)
+	ch(err, t)
+	b, err = Get(f, key)
+	if !bytes.Equal(b, key) {
+		t.Error("not equal")
+	}
+	err = Set(f, key, []byte("3"))
+	ch(err, t)
+	Close(f)
+	/* Force GC, to require finalizer to run */
+	runtime.GC()
+
+	b, err = Get(f, key)
+	if !bytes.Equal(b, []byte("3")) {
+		t.Error("not equal")
+	}
+	key2 := []byte("2")
+	err = Set(f, key2, key2)
+	ch(err, t)
+	b, err = Get(f, key2)
+	if !bytes.Equal(b, key2) {
+		t.Error("not equal")
+	}
+
+	_, err = Delete(f, key2)
+
+	b, err = Get(f, key2)
+	if err == nil || !bytes.Equal(b, nil) {
+		t.Error("not deleted")
+	}
+	Close(f)
+
+	b, err = Get(f, key2)
+	if err == nil || !bytes.Equal(b, nil) {
+		t.Error("not deleted")
+	}
+	keys, err := Keys(f, nil, 0, 0, true)
+	ch(err, t)
+	if !bytes.Equal(key, keys[0]) {
+		t.Error("not equal")
+	}
+	CloseAll()
+
+}
 func TestImplementation(t *testing.T) {
-	d := NewChanDict()
+	d, err := NewChanDict("2")
+	ch(err, t)
 	d.SetKey("foo", []byte("bar"))
-	val, ok := d.ReadKey("foo")
+	val, _ := d.ReadKey("foo")
 	fmt.Println(string(val))
 	d.DeleteKey("foo")
-	_, ok = d.ReadKey("foo")
+	_, ok := d.ReadKey("foo")
 	fmt.Println(ok)
 }
 
@@ -22,10 +91,10 @@ func TestOpen(t *testing.T) {
 	d, _ := Open("1")
 	//fmt.Println(d)
 	Set("1", []byte("foo"), []byte("bar"))
-	val, ok := d.ReadKey("foo")
-	fmt.Println(val)
+	//val, ok := d.ReadKey("foo")
+	fmt.Println(Get("1", []byte("foo")))
 	d.DeleteKey("foo")
-	_, ok = d.ReadKey("foo")
+	_, ok := d.ReadKey("foo")
 	fmt.Println(ok)
 }
 
@@ -93,9 +162,169 @@ func TestBytesConvert(t *testing.T) {
 		b := make([]byte, 4)
 		binary.BigEndian.PutUint32(b, uint32(i))
 		Set("", b, b)
-		bb, _ := Get("", b)
-		fmt.Println(binary.BigEndian.Uint32(bb))
+		bb, ee := Get("", b)
+		if ee == nil {
+			fmt.Println(binary.BigEndian.Uint32(bb))
+		}
+
+	}
+	fmt.Println(Keys("", nil, 0, 0, true))
+}
+
+func TestBench(t *testing.T) {
+	file := "1.db"
+	err := DeleteFile(file)
+	if err != nil {
+		fmt.Println(err)
+	}
+	var wg sync.WaitGroup
+
+	appendd := func(i int) {
+		defer wg.Done()
+		k := []byte(fmt.Sprintf("%04d", i))
+		err := Set(file, k, k)
+		if err != nil {
+			fmt.Println(err)
+		}
 	}
 
-	fmt.Println(Keys(""))
+	t1 := time.Now()
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		appendd(i)
+	}
+	wg.Wait()
+	t2 := time.Now()
+
+	fmt.Printf("The 100 Set took %v to run.\n", t2.Sub(t1))
+
+	read := func(i int) {
+		defer wg.Done()
+		k := []byte(fmt.Sprintf("%04d", i))
+		_, _ = Get(file, k)
+
+	}
+	//_ = read
+	t3 := time.Now()
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		read(i)
+		//k := []byte(fmt.Sprintf("%04d", i))
+		//_, _ = Get(file, k)
+	}
+	wg.Wait()
+	t4 := time.Now()
+
+	fmt.Printf("The 100 Get took %v to run.\n", t4.Sub(t3))
+
+	//Sets
+	var pairs [][]byte
+	for i := 0; i < 100; i++ {
+		k := []byte(fmt.Sprintf("%04d", i))
+		pairs = append(pairs, k)
+		pairs = append(pairs, k)
+	}
+	t5 := time.Now()
+	Sets(file, pairs)
+	t6 := time.Now()
+	fmt.Printf("The 100 Sets took %v to run.\n", t6.Sub(t5))
+
+	t7 := time.Now()
+	Keys(file, nil, 0, 0, true)
+	t8 := time.Now()
+	fmt.Printf("The 100 Keys took %v to run.\n", t8.Sub(t7))
+	CloseAll()
+}
+
+func TestSet(t *testing.T) {
+	var err error
+	//_, err = Open("1.db")
+	//ch(err, t)
+	defer CloseAll()
+	val, err := Get("nodb.db", []byte("1"))
+	logg(val)
+
+	err = Set("1.db", []byte("1"), []byte("11"))
+	ch(err, t)
+	err = Set("1.db", []byte("2"), []byte("22"))
+	ch(err, t)
+}
+
+func TestGet(t *testing.T) {
+	defer CloseAll()
+	Set("1.db", []byte("1"), []byte("11"))
+	res, err := Get("1.db", []byte("1"))
+	if err != nil {
+		t.Error(err)
+	}
+	logg("Get:" + string(res))
+	res2, err2 := Get("1.db", []byte("2"))
+	if err2 != nil {
+		t.Error(err2)
+	}
+	logg("Get:" + string(res2))
+	keys, err := Keys("1.db", nil, 0, 0, true)
+	ch(err, t)
+
+	result := Gets("1.db", keys)
+	logg(result)
+}
+
+func TestDelete(t *testing.T) {
+	var err error
+	f := "2.db"
+	os.Remove(f)
+	_, err = Open(f)
+	ch(err, t)
+	defer Close(f)
+	err = Set(f, []byte("1"), []byte("11"))
+	ch(err, t)
+	err = Set(f, []byte("2"), []byte("22"))
+	ch(err, t)
+	res, err := Get(f, []byte("2"))
+	logg(res)
+	deleted, err := Delete(f, []byte("2"))
+	logg(deleted)
+	if !deleted {
+		t.Error("not deleted")
+	}
+	_, err = Get(f, []byte("2"))
+	logg(err)
+	Close(f)
+	_, err = Open(f)
+	ch(err, t)
+	_, err = Get(f, []byte("2"))
+	logg(err)
+	d, _ := Get(f, []byte("1"))
+	logg(d)
+	Close(f)
+}
+
+func TestRewriteVal(t *testing.T) {
+	var err error
+	f := "2.db"
+	fmt.Println("123")
+	DeleteFile(f)
+	_, err = Open(f)
+	ch(err, t)
+	defer Close(f)
+
+	ch(Set(f, []byte("key1"), []byte("val1")), t)
+	ch(Set(f, []byte("key1"), []byte("val2")), t)
+	ch(Set(f, []byte("key3"), []byte("val3")), t)
+	ch(Set(f, []byte("key1"), []byte("val0")), t)
+	ch(Set(f, []byte("key1"), []byte("val")), t)
+	v, _ := Get(f, []byte("key1"))
+	logg(string(v))
+	if !bytes.Equal([]byte("val"), v) {
+
+		t.Error("not equal")
+	} else {
+		logg(string(v))
+	}
+}
+
+func TestErrOpen(t *testing.T) {
+	d, e := Open("")
+	fmt.Println(d, e)
 }
