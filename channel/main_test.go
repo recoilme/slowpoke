@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"os"
 	"runtime"
 	"strconv"
 	"sync"
@@ -29,7 +28,7 @@ func ch(err error, t *testing.T) {
 func TestBase(t *testing.T) {
 	var err error
 	var b []byte
-	f := "1.db"
+	f := "TestBase.db"
 	DeleteFile(f)
 	key := []byte("1")
 	err = Set(f, key, key)
@@ -100,7 +99,9 @@ func TestOpen(t *testing.T) {
 
 func TestAsync(t *testing.T) {
 	len := 5
-	file := "1"
+	file := "async.db"
+	DeleteFile(file)
+	defer CloseAll()
 
 	messages := make(chan int)
 	readmessages := make(chan string)
@@ -110,7 +111,10 @@ func TestAsync(t *testing.T) {
 		defer wg.Done()
 		k := ("Key:" + strconv.Itoa(i))
 		v := ("Val:" + strconv.Itoa(i))
-		Set(file, []byte(k), []byte(v))
+		err := Set(file, []byte(k), []byte(v))
+		if err != nil {
+			t.Error(err)
+		}
 		messages <- i
 	}
 
@@ -172,7 +176,7 @@ func TestBytesConvert(t *testing.T) {
 }
 
 func TestBench(t *testing.T) {
-	file := "1.db"
+	file := "bench.db"
 	err := DeleteFile(file)
 	if err != nil {
 		fmt.Println(err)
@@ -267,13 +271,14 @@ func TestGet(t *testing.T) {
 	ch(err, t)
 
 	result := Gets("1.db", keys)
-	logg(result)
+	_ = result
+	//logg(result)
 }
 
 func TestDelete(t *testing.T) {
 	var err error
 	f := "2.db"
-	os.Remove(f)
+	DeleteFile(f)
 	_, err = Open(f)
 	ch(err, t)
 	defer Close(f)
@@ -302,12 +307,12 @@ func TestDelete(t *testing.T) {
 
 func TestRewriteVal(t *testing.T) {
 	var err error
-	f := "2.db"
+	f := "TestRewriteVal.db"
 	fmt.Println("123")
 	DeleteFile(f)
 	_, err = Open(f)
 	ch(err, t)
-	defer Close(f)
+	defer CloseAll()
 
 	ch(Set(f, []byte("key1"), []byte("val1")), t)
 	ch(Set(f, []byte("key1"), []byte("val2")), t)
@@ -315,16 +320,147 @@ func TestRewriteVal(t *testing.T) {
 	ch(Set(f, []byte("key1"), []byte("val0")), t)
 	ch(Set(f, []byte("key1"), []byte("val")), t)
 	v, _ := Get(f, []byte("key1"))
-	logg(string(v))
+	//logg(string(v))
 	if !bytes.Equal([]byte("val"), v) {
-
 		t.Error("not equal")
-	} else {
-		logg(string(v))
 	}
 }
 
-func TestErrOpen(t *testing.T) {
-	d, e := Open("")
-	fmt.Println(d, e)
+func TestKeys(t *testing.T) {
+	var err error
+	f := "keys.db"
+	DeleteFile(f)
+	_, err = Open(f)
+	ch(err, t)
+	defer Close(f)
+	append := func(i int) {
+
+		k := []byte(fmt.Sprintf("%02d", i))
+		v := []byte("Val:" + strconv.Itoa(i))
+		err := Set(f, k, v)
+		ch(err, t)
+
+	}
+	for i := 1; i <= 20; i++ {
+		append(i)
+	}
+
+	//ascending
+	res, err := Keys(f, nil, 0, 0, true)
+	var s = ""
+	for _, r := range res {
+		s += string(r)
+	}
+	if s != "0102030405060708091011121314151617181920" {
+		t.Error("not asc", s)
+	}
+	//descending
+	resdesc, err := Keys(f, nil, 0, 0, false)
+	s = ""
+	for _, r := range resdesc {
+		s += string(r)
+	}
+	if s != "2019181716151413121110090807060504030201" {
+		t.Error("not desc")
+	}
+
+	//offset limit asc
+	reslimit, err := Keys(f, nil, 2, 2, true)
+	s = ""
+	for _, r := range reslimit {
+		s += string(r)
+	}
+	if s != "0304" {
+		t.Error("not off", s)
+	}
+
+	//offset limit desc
+	reslimitdesc, err := Keys(f, nil, 2, 2, false)
+	s = ""
+	for _, r := range reslimitdesc {
+		s += string(r)
+	}
+	if s != "1817" {
+		t.Error("not off desc", s)
+	}
+
+	//from byte asc
+	resfromasc, err := Keys(f, []byte("10"), 2, 2, true)
+	s = ""
+	for _, r := range resfromasc {
+		s += string(r)
+	}
+	if s != "1314" {
+		t.Error("not off desc", s)
+	}
+
+	//from byte desc
+	resfromdesc, err := Keys(f, []byte("10"), 2, 2, false)
+	s = ""
+	for _, r := range resfromdesc {
+		s += string(r)
+	}
+	if s != "0706" {
+		t.Error("not off desc", s)
+	}
+
+	//from byte desc
+	resnotfound, err := Keys(f, []byte("100"), 2, 2, false)
+	s = ""
+	for _, r := range resnotfound {
+		s += string(r)
+	}
+	if s != "" {
+		t.Error("resnotfound", s)
+	}
+
+	//from byte not eq
+	resnoteq, err := Keys(f, []byte("33"), 2, 2, false)
+	s = ""
+	for _, r := range resnoteq {
+		s += string(r)
+	}
+	if s != "" {
+		t.Error("resnoteq", s)
+	}
+
+	//by prefix
+	respref, err := Keys(f, []byte("2*"), 2, 0, false)
+	s = ""
+	for _, r := range respref {
+		s += string(r)
+	}
+	if s != "20" {
+		t.Error("respref", s)
+	}
+
+	//by prefix2
+	respref2, err := Keys(f, []byte("1*"), 2, 0, false)
+	s = ""
+	for _, r := range respref2 {
+		s += string(r)
+	}
+	if s != "10" {
+		t.Error("respref", s)
+	}
+
+	//by prefixasc
+	resprefasc, err := Keys(f, []byte("1*"), 2, 0, true)
+	s = ""
+	for _, r := range resprefasc {
+		s += string(r)
+	}
+	if s != "1011" {
+		t.Error("resprefasc", s)
+	}
+
+	//by prefixasc2
+	resprefasc2, err := Keys(f, []byte("1*"), 0, 0, true)
+	s = ""
+	for _, r := range resprefasc2 {
+		s += string(r)
+	}
+	if s != "10111213141516171819" {
+		t.Error("resprefasc2", s)
+	}
 }

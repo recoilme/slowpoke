@@ -22,6 +22,7 @@ const (
 
 var (
 	stores sync.Map
+	mutex  = &sync.Mutex{}
 
 	// ErrKeyNotFound - key not found
 	ErrKeyNotFound = errors.New("Error: key not found")
@@ -82,6 +83,10 @@ type keyRequestResponse struct {
 }
 
 type keyRequest struct {
+	fromKey      []byte
+	limit        uint32
+	offset       uint32
+	asc          bool
 	responseChan chan keyRequestResponse
 }
 
@@ -167,7 +172,7 @@ func run(parentCtx context.Context, fk *syncfile.SyncFile, fv *syncfile.SyncFile
 		})
 		//fmt.Printf("after sort keys:%+v\n", keysDict)
 		found := sort.Search(len(keysDict), func(i int) bool {
-			return bytes.Compare(keysDict[i], b) >= 0 //bytes.Equal(keysDict[i], b)
+			return bytes.Compare(keysDict[i], b) >= 0
 		})
 		if found >= 0 && found < len(keysDict) {
 			//fmt.Printf("found:%d key:%+v keys:%+v\n", found, b, keysDict)
@@ -254,8 +259,10 @@ func run(parentCtx context.Context, fk *syncfile.SyncFile, fv *syncfile.SyncFile
 				}
 			} else {
 				// new key
+
 				seek, _, err = fv.Write(wr.writeVal)
 				cmd.Seek = uint32(seek)
+				//fmt.Println(fv, wr.readKey, string(wr.writeVal), cmd.Seek, err)
 
 				//write new key at keys store
 				keysDict = append(keysDict, []byte(wr.readKey))
@@ -280,7 +287,124 @@ func run(parentCtx context.Context, fk *syncfile.SyncFile, fv *syncfile.SyncFile
 			}
 
 		case kr := <-keyRequests:
-			kr.responseChan <- keyRequestResponse{keys: keysDict}
+
+			//sort slice
+			sort.Slice(keysDict, func(i, j int) bool {
+				return bytes.Compare(keysDict[i], keysDict[j]) <= 0
+			})
+			var result [][]byte
+			result = make([][]byte, 0)
+			lenKeys := len(keysDict)
+			var start, end, found int
+			var byPrefix bool
+			found = -1
+			if kr.fromKey != nil {
+				if bytes.Equal(kr.fromKey[len(kr.fromKey)-1:], []byte("*")) {
+					byPrefix = true
+					_ = byPrefix
+					kr.fromKey = kr.fromKey[:len(kr.fromKey)-1]
+					//fmt.Println(string(kr.fromKey))
+				}
+				found = sort.Search(lenKeys, func(i int) bool {
+					//bynary search may return not eq result
+					return bytes.Compare(keysDict[i], kr.fromKey) >= 0
+				})
+				if found == lenKeys {
+					//not found
+					found = -1
+				} else {
+					//found
+					if !byPrefix && !bytes.Equal(keysDict[found], kr.fromKey) {
+						found = -1 //not eq
+					}
+				}
+
+				// if not found - found will == len and return empty array
+				//fmt.Println(string(kr.fromKey), found)
+			}
+
+			if kr.asc {
+				start = 0
+				if kr.fromKey != nil {
+					if found == -1 {
+						start = lenKeys
+					} else {
+						start = found + 1
+						if byPrefix {
+							//include
+							start = found
+						}
+					}
+				}
+				if kr.offset > 0 {
+					start += int(kr.offset)
+				}
+				end = lenKeys
+				if kr.limit > 0 {
+					end = start + int(kr.limit)
+					if end > lenKeys {
+						end = lenKeys
+					}
+				}
+				if start < lenKeys {
+					for i := start; i < end; i++ {
+						if byPrefix {
+							if len(keysDict[i]) < len(kr.fromKey) {
+								break
+							} else {
+								//compare with prefix
+								//fmt.Println("prefix", string(keysDict[i][:len(kr.fromKey)]), string(kr.fromKey))
+								if !bytes.Equal(keysDict[i][:len(kr.fromKey)], kr.fromKey) {
+									break
+								}
+							}
+						}
+						result = append(result, keysDict[i])
+					}
+				}
+			} else {
+				//descending
+				start = lenKeys - 1
+				if kr.fromKey != nil {
+					if found == -1 {
+						start = -1
+					} else {
+						start = found - 1
+						if byPrefix {
+							//include
+							start = found
+						}
+					}
+				}
+
+				if kr.offset > 0 {
+					start -= int(kr.offset)
+				}
+				end = 0
+				if kr.limit > 0 {
+					end = start - int(kr.limit) + 1
+					if end < 0 {
+						end = 0
+					}
+				}
+				if start >= 0 {
+					for i := start; i >= end; i-- {
+						if byPrefix {
+							if len(keysDict[i]) < len(kr.fromKey) {
+								break
+							} else {
+								//compare with prefix
+								//fmt.Println("prefix", string(keysDict[i][:len(kr.fromKey)]), string(kr.fromKey))
+								if !bytes.Equal(keysDict[i][:len(kr.fromKey)], kr.fromKey) {
+									break
+								}
+							}
+						}
+						result = append(result, keysDict[i])
+					}
+				}
+			}
+			kr.responseChan <- keyRequestResponse{keys: result}
 			close(kr.responseChan)
 		}
 	}
@@ -346,9 +470,10 @@ func (dict *ChanDict) DeleteKey(key string) {
 	<-c
 }
 
-func (dict *ChanDict) ReadKeys() [][]byte {
+func (dict *ChanDict) ReadKeys(from []byte, limit, offset uint32, asc bool) [][]byte {
 	c := make(chan keyRequestResponse)
-	w := keyRequest{responseChan: c}
+	w := keyRequest{responseChan: c, fromKey: from, limit: limit, offset: offset, asc: asc}
+
 	dict.keyRequests <- w
 	resp := <-c
 	return resp.keys
@@ -359,6 +484,7 @@ func (dict *ChanDict) ReadKeys() [][]byte {
 // If err on insert val - key not inserted
 func Set(file string, key []byte, val []byte) (err error) {
 	db, err := Open(file)
+	//fmt.Println("set", db, err)
 	if err != nil {
 		return err
 	}
@@ -369,12 +495,16 @@ func Set(file string, key []byte, val []byte) (err error) {
 // Open create file (with dirs) or read keys to map
 // Save for multiple open
 func Open(file string) (db *ChanDict, err error) {
+	mutex.Lock()
+	defer mutex.Unlock()
 	var ok bool
 	v, ok := stores.Load(file)
 	if ok {
 		return v.(*ChanDict), nil
 	}
+	//fmt.Println("NewChanDict")
 	db, err = NewChanDict(file)
+	//fmt.Println("NewChanDict", file, err)
 	if err == nil {
 		stores.Store(file, db)
 	}
@@ -396,7 +526,7 @@ func Keys(file string, from []byte, limit, offset uint32, asc bool) ([][]byte, e
 	if err != nil {
 		return nil, err
 	}
-	val := db.ReadKeys()
+	val := db.ReadKeys(from, limit, offset, asc)
 	return val, err
 }
 
