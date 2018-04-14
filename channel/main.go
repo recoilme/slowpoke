@@ -21,8 +21,8 @@ const (
 )
 
 var (
-	stores sync.Map
-	mutex  = &sync.Mutex{}
+	stores = make(map[string]*ChanDict)
+	mutex  = &sync.RWMutex{}
 
 	// ErrKeyNotFound - key not found
 	ErrKeyNotFound = errors.New("Error: key not found")
@@ -440,6 +440,7 @@ func writeKey(fk *syncfile.SyncFile, t uint8, seek, size uint32, key []byte, syn
 	return newSeek, err
 }
 
+// SetKey internal command may be close in interface
 func (dict *ChanDict) SetKey(key string, val []byte) error {
 	c := make(chan writeRequestResponse)
 	w := writeRequest{readKey: key, writeVal: val, responseChan: c}
@@ -497,16 +498,16 @@ func Set(file string, key []byte, val []byte) (err error) {
 func Open(file string) (db *ChanDict, err error) {
 	mutex.Lock()
 	defer mutex.Unlock()
-	var ok bool
-	v, ok := stores.Load(file)
+
+	v, ok := stores[file]
 	if ok {
-		return v.(*ChanDict), nil
+		return v, nil
 	}
+
 	//fmt.Println("NewChanDict")
 	db, err = NewChanDict(file)
-	//fmt.Println("NewChanDict", file, err)
 	if err == nil {
-		stores.Store(file, db)
+		stores[file] = db
 	}
 	return db, err
 }
@@ -521,6 +522,11 @@ func Get(file string, key []byte) (val []byte, err error) {
 	return val, err
 }
 
+// Keys return keys in asc/desc order (false - descending,true - ascending)
+// if limit == 0 return all keys
+// offset - skip count records
+// If from not nil - return keys after from (from not included)
+// If last byte of from == "*" - use as prefix
 func Keys(file string, from []byte, limit, offset uint32, asc bool) ([][]byte, error) {
 	db, err := Open(file)
 	if err != nil {
@@ -532,34 +538,35 @@ func Keys(file string, from []byte, limit, offset uint32, asc bool) ([][]byte, e
 
 // Close close file key and file val and delete db from map
 func Close(file string) (err error) {
-	_, ok := stores.Load(file)
+	_, ok := stores[file]
 	if !ok {
 		return ErrDbNotOpen
 	}
-	//err = db.Fkey.Close()
-	//err = db.Fval.Close()
-	//delete(dbs, file)
-	stores.Delete(file)
+	mutex.Lock()
+	delete(stores, file)
+	mutex.Unlock()
+	/* Force GC, to require finalizer to run */
+	runtime.GC()
 	return err
 }
 
 // CloseAll - close all opened Db
 func CloseAll() (err error) {
 
-	stores.Range(func(k, v interface{}) bool {
-		err = Close(k.(string))
+	for k := range stores {
+		err = Close(k)
 		if err != nil {
-			return false
+			break
 		}
-		return true // if false, Range stops
-	})
+	}
 
 	return err
 }
 
 // DeleteFile close file key and file val and delete db from map and disk
 func DeleteFile(file string) (err error) {
-	stores.Delete(file)
+	Close(file)
+
 	err = os.Remove(file)
 	if err != nil {
 		return err
@@ -568,19 +575,19 @@ func DeleteFile(file string) (err error) {
 	return err
 }
 
-// Gets return key/value pairs
+// Gets return key/value pairs in random order
 func Gets(file string, keys [][]byte) (result [][]byte) {
 	var wg sync.WaitGroup
-	var mutex = &sync.Mutex{}
+	var mut = &sync.Mutex{}
 
 	read := func(k []byte) {
 		defer wg.Done()
 		val, err := Get(file, k)
 		if err == nil {
-			mutex.Lock()
+			mut.Lock()
 			result = append(result, k)
 			result = append(result, val)
-			mutex.Unlock()
+			mut.Unlock()
 		}
 	}
 

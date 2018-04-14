@@ -162,17 +162,25 @@ func TestAsync(t *testing.T) {
 }
 
 func TestBytesConvert(t *testing.T) {
+	file := "BytesConvert.db"
+	DeleteFile(file)
+	defer CloseAll()
 	for i := 1; i <= 20; i++ {
 		b := make([]byte, 4)
 		binary.BigEndian.PutUint32(b, uint32(i))
-		Set("", b, b)
-		bb, ee := Get("", b)
-		if ee == nil {
-			fmt.Println(binary.BigEndian.Uint32(bb))
+		Set(file, b, b)
+		_, ee := Get(file, b)
+		if ee != nil {
+			t.Error(ee)
 		}
 
 	}
-	fmt.Println(Keys("", nil, 0, 0, true))
+	b20 := make([]byte, 4)
+	binary.BigEndian.PutUint32(b20, uint32(20))
+	keys, _ := Keys(file, nil, 1, 0, false)
+	if len(keys) != 1 || !bytes.Equal(b20, keys[0]) {
+		t.Error(file)
+	}
 }
 
 func TestBench(t *testing.T) {
