@@ -45,32 +45,24 @@ type Cmd struct {
 	KeySeek uint32
 }
 
-type readRequestResponse struct {
+type readResponse struct {
 	val []byte
 	err error
 }
 
 type readRequest struct {
 	readKey      string
-	responseChan chan readRequestResponse
+	responseChan chan readResponse
 }
 
-type writeRequestResponse struct {
+type writeResponse struct {
 	err error
 }
 
 type writeRequest struct {
 	readKey      string
 	writeVal     []byte
-	responseChan chan writeRequestResponse
-}
-
-type casRequest struct {
-	setOnNotExists bool
-	readKey        string
-	oldVal         []byte
-	newVal         []byte
-	responseChan   chan bool
+	responseChan chan writeResponse
 }
 
 type deleteRequest struct {
@@ -78,39 +70,62 @@ type deleteRequest struct {
 	responseChan chan struct{}
 }
 
-type keyRequestResponse struct {
+type keyResponse struct {
 	keys [][]byte
 }
 
-type keyRequest struct {
+type keysRequest struct {
 	fromKey      []byte
 	limit        uint32
 	offset       uint32
 	asc          bool
-	responseChan chan keyRequestResponse
+	responseChan chan keyResponse
 }
 
+type setsResponse struct {
+	err error
+}
+
+type setsRequest struct {
+	pairs        [][]byte
+	responseChan chan setsResponse
+}
+
+type getsResponse struct {
+	pairs [][]byte
+}
+
+type getsRequest struct {
+	keys         [][]byte
+	responseChan chan getsResponse
+}
+
+// ChanDict store channels
 type ChanDict struct {
 	readRequests   chan readRequest
 	writeRequests  chan writeRequest
-	casRequests    chan casRequest
 	deleteRequests chan deleteRequest
-	keyRequests    chan keyRequest
+	keysRequests   chan keysRequest
+	setsRequests   chan setsRequest
+	getsRequests   chan getsRequest
 }
 
+// NewChanDict Create new Db
 func NewChanDict(file string) (*ChanDict, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	readRequests := make(chan readRequest)
 	writeRequests := make(chan writeRequest)
-	casRequests := make(chan casRequest)
 	deleteRequests := make(chan deleteRequest)
-	keyRequests := make(chan keyRequest)
+	keysRequests := make(chan keysRequest)
+	setsRequests := make(chan setsRequest)
+	getsRequests := make(chan getsRequest)
 	d := &ChanDict{
 		readRequests:   readRequests,
 		writeRequests:  writeRequests,
-		casRequests:    casRequests,
 		deleteRequests: deleteRequests,
-		keyRequests:    keyRequests,
+		keysRequests:   keysRequests,
+		setsRequests:   setsRequests,
+		getsRequests:   getsRequests,
 	}
 	// This is a lambda, so we don't have to add members to the struct
 	runtime.SetFinalizer(d, func(dict *ChanDict) {
@@ -135,7 +150,7 @@ func NewChanDict(file string) (*ChanDict, error) {
 	}
 
 	// We can't have run be a method of ChanDict, because otherwise then the goroutine will keep the reference alive
-	go run(ctx, fk, fv, readRequests, writeRequests, casRequests, deleteRequests, keyRequests)
+	go run(ctx, fk, fv, readRequests, writeRequests, deleteRequests, keysRequests, setsRequests, getsRequests)
 
 	return d, nil
 }
@@ -156,8 +171,9 @@ func checkAndCreate(path string) (bool, error) {
 }
 
 func run(parentCtx context.Context, fk *syncfile.SyncFile, fv *syncfile.SyncFile,
-	readRequests <-chan readRequest, writeRequests <-chan writeRequest, casRequests <-chan casRequest,
-	deleteRequests <-chan deleteRequest, keyRequests <-chan keyRequest) error {
+	readRequests <-chan readRequest, writeRequests <-chan writeRequest,
+	deleteRequests <-chan deleteRequest, keysRequests <-chan keysRequest,
+	setsRequests <-chan setsRequest, getsRequests <-chan getsRequest) error {
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 	valDict := make(map[string]*Cmd)
@@ -277,21 +293,26 @@ func run(parentCtx context.Context, fk *syncfile.SyncFile, fv *syncfile.SyncFile
 				valDict[wr.readKey] = cmd
 			}
 
-			wr.responseChan <- writeRequestResponse{err}
+			wr.responseChan <- writeResponse{err}
 		case rr := <-readRequests:
 			if val, exists := valDict[rr.readKey]; exists {
 				b, err := fv.Read(int64(val.Size), int64(val.Seek))
-				rr.responseChan <- readRequestResponse{b, err}
+				rr.responseChan <- readResponse{b, err}
 			} else {
-				rr.responseChan <- readRequestResponse{nil, ErrKeyNotFound}
+				rr.responseChan <- readResponse{nil, ErrKeyNotFound}
 			}
 
-		case kr := <-keyRequests:
+		case kr := <-keysRequests:
 
 			//sort slice
-			sort.Slice(keysDict, func(i, j int) bool {
+			sorted := sort.SliceIsSorted(keysDict, func(i, j int) bool {
 				return bytes.Compare(keysDict[i], keysDict[j]) <= 0
 			})
+			if !sorted {
+				sort.Slice(keysDict, func(i, j int) bool {
+					return bytes.Compare(keysDict[i], keysDict[j]) <= 0
+				})
+			}
 			var result [][]byte
 			result = make([][]byte, 0)
 			lenKeys := len(keysDict)
@@ -404,8 +425,60 @@ func run(parentCtx context.Context, fk *syncfile.SyncFile, fv *syncfile.SyncFile
 					}
 				}
 			}
-			kr.responseChan <- keyRequestResponse{keys: result}
+			kr.responseChan <- keyResponse{keys: result}
 			close(kr.responseChan)
+		case sr := <-setsRequests:
+			var err error
+			var seek, newSeek int64
+			for i := range sr.pairs {
+				if i%2 != 0 {
+					// on even - append val and store key
+					if sr.pairs[i] == nil || sr.pairs[i-1] == nil {
+						break
+					}
+					//key - sr.pairs[i-1]
+					//val - sr.pairs[i]
+					cmd := &Cmd{Size: uint32(len(sr.pairs[i]))}
+					seek, _, err = fv.WriteNoSync(sr.pairs[i])
+					cmd.Seek = uint32(seek)
+					if err != nil {
+						break
+					}
+
+					newSeek, err = writeKey(fk, 0, cmd.Seek, cmd.Size, sr.pairs[i-1], false, -1)
+					cmd.KeySeek = uint32(newSeek)
+					if err != nil {
+						break
+					}
+					keyStr := string(sr.pairs[i-1])
+					if _, exists := valDict[keyStr]; !exists {
+						//new key
+						//write new key at keys store
+						keysDict = append(keysDict, sr.pairs[i-1])
+					}
+					valDict[keyStr] = cmd
+
+				}
+			}
+			if err == nil {
+				err = fk.Sync()
+				if err == nil {
+					err = fv.Sync()
+				}
+			}
+
+			sr.responseChan <- setsResponse{err}
+		case gr := <-getsRequests:
+			var result [][]byte
+			result = make([][]byte, 0)
+			for _, key := range gr.keys {
+				if val, exists := valDict[string(key)]; exists {
+					val, _ := fv.Read(int64(val.Size), int64(val.Seek))
+					result = append(result, key)
+					result = append(result, val)
+				}
+			}
+			gr.responseChan <- getsResponse{result}
 		}
 	}
 }
@@ -415,15 +488,15 @@ func writeKey(fk *syncfile.SyncFile, t uint8, seek, size uint32, key []byte, syn
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
-	buf.Grow(14 + len(key))
+	buf.Grow(16 + len(key))
 
 	//encode
-	binary.Write(buf, binary.BigEndian, uint8(0)) //1byte
-	binary.Write(buf, binary.BigEndian, t)        //1byte
-	binary.Write(buf, binary.BigEndian, seek)     //4byte
-	binary.Write(buf, binary.BigEndian, size)     //4byte
-	binary.Write(buf, binary.BigEndian, uint32(time.Now().Unix()))
-	binary.Write(buf, binary.BigEndian, uint16(len(key)))
+	binary.Write(buf, binary.BigEndian, uint8(0))                  //1byte
+	binary.Write(buf, binary.BigEndian, t)                         //1byte
+	binary.Write(buf, binary.BigEndian, seek)                      //4byte
+	binary.Write(buf, binary.BigEndian, size)                      //4byte
+	binary.Write(buf, binary.BigEndian, uint32(time.Now().Unix())) //4byte
+	binary.Write(buf, binary.BigEndian, uint16(len(key)))          //2byte
 	buf.Write(key)
 
 	if sync {
@@ -442,7 +515,7 @@ func writeKey(fk *syncfile.SyncFile, t uint8, seek, size uint32, key []byte, syn
 
 // SetKey internal command may be close in interface
 func (dict *ChanDict) SetKey(key string, val []byte) error {
-	c := make(chan writeRequestResponse)
+	c := make(chan writeResponse)
 	w := writeRequest{readKey: key, writeVal: val, responseChan: c}
 	dict.writeRequests <- w
 	resp := <-c
@@ -450,18 +523,11 @@ func (dict *ChanDict) SetKey(key string, val []byte) error {
 }
 
 func (dict *ChanDict) ReadKey(key string) ([]byte, error) {
-	c := make(chan readRequestResponse)
+	c := make(chan readResponse)
 	w := readRequest{readKey: key, responseChan: c}
 	dict.readRequests <- w
 	resp := <-c
 	return resp.val, resp.err
-}
-
-func (dict *ChanDict) CasVal(key string, oldVal, newVal []byte, setOnNotExists bool) bool {
-	c := make(chan bool)
-	w := casRequest{readKey: key, oldVal: oldVal, newVal: newVal, responseChan: c, setOnNotExists: setOnNotExists}
-	dict.casRequests <- w
-	return <-c
 }
 
 func (dict *ChanDict) DeleteKey(key string) {
@@ -472,12 +538,28 @@ func (dict *ChanDict) DeleteKey(key string) {
 }
 
 func (dict *ChanDict) ReadKeys(from []byte, limit, offset uint32, asc bool) [][]byte {
-	c := make(chan keyRequestResponse)
-	w := keyRequest{responseChan: c, fromKey: from, limit: limit, offset: offset, asc: asc}
+	c := make(chan keyResponse)
+	w := keysRequest{responseChan: c, fromKey: from, limit: limit, offset: offset, asc: asc}
 
-	dict.keyRequests <- w
+	dict.keysRequests <- w
 	resp := <-c
 	return resp.keys
+}
+
+func (dict *ChanDict) SetsKeys(setPairs [][]byte) error {
+	c := make(chan setsResponse)
+	w := setsRequest{pairs: setPairs, responseChan: c}
+	dict.setsRequests <- w
+	resp := <-c
+	return resp.err
+}
+
+func (dict *ChanDict) GetsKeys(keys [][]byte) [][]byte {
+	c := make(chan getsResponse)
+	w := getsRequest{keys: keys, responseChan: c}
+	dict.getsRequests <- w
+	resp := <-c
+	return resp.pairs
 }
 
 // Set store val and key
@@ -493,8 +575,7 @@ func Set(file string, key []byte, val []byte) (err error) {
 	return err
 }
 
-// Open create file (with dirs) or read keys to map
-// Save for multiple open
+// Open open/create Db (with dirs)
 func Open(file string) (db *ChanDict, err error) {
 	mutex.Lock()
 	defer mutex.Unlock()
@@ -577,47 +658,27 @@ func DeleteFile(file string) (err error) {
 
 // Gets return key/value pairs in random order
 func Gets(file string, keys [][]byte) (result [][]byte) {
-	var wg sync.WaitGroup
-	var mut = &sync.Mutex{}
-
-	read := func(k []byte) {
-		defer wg.Done()
-		val, err := Get(file, k)
-		if err == nil {
-			mut.Lock()
-			result = append(result, k)
-			result = append(result, val)
-			mut.Unlock()
-		}
+	db, err := Open(file)
+	if err != nil {
+		return nil
 	}
-
-	wg.Add(len(keys))
-	for _, key := range keys {
-		go read(key)
-	}
-	wg.Wait()
-	return result
+	return db.GetsKeys(keys)
 }
 
 // Sets store vals and keys like bulk insert
-// Fsync will called only twice at end of insertion
+// Sync will called only twice at end of insertion
 func Sets(file string, pairs [][]byte) (err error) {
 
-	for i := range pairs {
-		if i%2 != 0 {
-			// on even - append val and store key
-			if pairs[i] == nil || pairs[i-1] == nil {
-				break
-			}
-			err = Set(file, pairs[i-1], pairs[i])
-			if err != nil {
-				break
-			}
-		}
+	db, err := Open(file)
+	//fmt.Println("set", db, err)
+	if err != nil {
+		return err
 	}
+	err = db.SetsKeys(pairs)
 	return err
 }
 
+// Delete key
 func Delete(file string, key []byte) (deleted bool, err error) {
 	db, err := Open(file)
 	if err != nil {

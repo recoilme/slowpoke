@@ -76,7 +76,7 @@ func TestBase(t *testing.T) {
 
 }
 func TestImplementation(t *testing.T) {
-	d, err := NewChanDict("2")
+	d, err := NewChanDict("implementation.db")
 	ch(err, t)
 	d.SetKey("foo", []byte("bar"))
 	val, _ := d.ReadKey("foo")
@@ -87,11 +87,11 @@ func TestImplementation(t *testing.T) {
 }
 
 func TestOpen(t *testing.T) {
-	d, _ := Open("1")
+	d, _ := Open("open.db")
 	//fmt.Println(d)
-	Set("1", []byte("foo"), []byte("bar"))
+	Set("open.db", []byte("foo"), []byte("bar"))
 	//val, ok := d.ReadKey("foo")
-	fmt.Println(Get("1", []byte("foo")))
+	fmt.Println(Get("open.db", []byte("foo")))
 	d.DeleteKey("foo")
 	_, ok := d.ReadKey("foo")
 	fmt.Println(ok)
@@ -214,6 +214,7 @@ func TestBench(t *testing.T) {
 		defer wg.Done()
 		k := []byte(fmt.Sprintf("%04d", i))
 		_, _ = Get(file, k)
+		//fmt.Println(string(res))
 
 	}
 	//_ = read
@@ -242,9 +243,19 @@ func TestBench(t *testing.T) {
 	fmt.Printf("The 100 Sets took %v to run.\n", t6.Sub(t5))
 
 	t7 := time.Now()
-	Keys(file, nil, 0, 0, true)
+	Keys(file, nil, 0, 0, false)
 	t8 := time.Now()
 	fmt.Printf("The 100 Keys took %v to run.\n", t8.Sub(t7))
+
+	t9 := time.Now()
+	keys, _ := Keys(file, nil, 0, 0, false)
+	t10 := time.Now()
+	fmt.Printf("The second 100 Keys took %v to run.\n", t10.Sub(t9))
+
+	t11 := time.Now()
+	_ = Gets(file, keys)
+	t12 := time.Now()
+	fmt.Printf("The 100 Gets took %v to run.\n", t12.Sub(t11))
 	CloseAll()
 }
 
@@ -449,7 +460,7 @@ func TestKeys(t *testing.T) {
 		s += string(r)
 	}
 	if s != "10" {
-		t.Error("respref", s)
+		t.Error("respref2", s)
 	}
 
 	//by prefixasc
