@@ -75,16 +75,6 @@ func TestBase(t *testing.T) {
 	CloseAll()
 
 }
-func TestImplementation(t *testing.T) {
-	d, err := NewChanDict("implementation.db")
-	ch(err, t)
-	d.SetKey("foo", []byte("bar"))
-	val, _ := d.ReadKey("foo")
-	fmt.Println(string(val))
-	d.DeleteKey("foo")
-	_, ok := d.ReadKey("foo")
-	fmt.Println(ok)
-}
 
 func TestOpen(t *testing.T) {
 	d, _ := Open("open.db")
@@ -92,8 +82,8 @@ func TestOpen(t *testing.T) {
 	Set("open.db", []byte("foo"), []byte("bar"))
 	//val, ok := d.ReadKey("foo")
 	fmt.Println(Get("open.db", []byte("foo")))
-	d.DeleteKey("foo")
-	_, ok := d.ReadKey("foo")
+	d.deleteKey("foo")
+	_, ok := d.readKey("foo")
 	fmt.Println(ok)
 }
 
@@ -482,4 +472,49 @@ func TestKeys(t *testing.T) {
 	if s != "10111213141516171819" {
 		t.Error("resprefasc2", s)
 	}
+}
+
+func TestWriteRead(t *testing.T) {
+	len := 500
+	file := "async.db"
+	var wg sync.WaitGroup
+	//var mutex = &sync.RWMutex{}
+	//DeleteFile(file)
+	defer CloseAll()
+	append := func(i int) {
+		defer wg.Done()
+		//mutex.Lock()
+		k := ("Key:" + strconv.Itoa(i))
+		v := ("Val:" + strconv.Itoa(i))
+		err := Set(file, []byte(k), []byte(v))
+		//mutex.Unlock()
+		if err != nil {
+			t.Error(err)
+		}
+		//fmt.Println("Set:" + strconv.Itoa(i))
+	}
+	_ = append
+
+	read := func(i int) {
+		defer wg.Done()
+		k := ("Key:" + strconv.Itoa(i))
+		//mutex.Lock()
+		b, e := Get(file, []byte(k))
+		need := []byte("Val:" + strconv.Itoa(i))
+		if e == nil && !bytes.Equal(need, b) {
+			t.Error("Not Eq")
+		}
+		//fmt.Println("Get:" + strconv.Itoa(i) + " =" + string(b))
+		//mutex.Unlock()
+	}
+	_ = read
+	Open(file)
+	for i := 1; i <= len; i++ {
+		wg.Add(2)
+		go append(i)
+		go read(i)
+	}
+
+	wg.Wait()
+
 }

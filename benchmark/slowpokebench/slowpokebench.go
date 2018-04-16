@@ -77,7 +77,7 @@ func testSet() {
 	slowpoke.CloseAll()
 }
 
-//macbook 2017 slowpoke/bolt
+//macbook 2017 slowpoke synced/bolt
 //The 100 Set took 13.270801ms to run./15.538641ms
 //The 100 Get took 279.128µs to run./191.673µs
 //The 100 Sets took 1.124931ms to run./-
@@ -89,13 +89,15 @@ func testSet() {
 //The 100 Sets took 264.417µs to run.
 //The 100 Keys took 3.04µs to run.
 
-//in files slowpoke
-//The 100 Set took 17.617283ms to run.
-//The 100 Get took 622.32µs to run.
-//The 100 Sets took 1.265394ms to run.
-//The 100 Keys took 38.456µs to run.
-//The second 100 Keys took 20.789µs to run.
-//The 100 Gets took 230.196µs to run.
+//in files slowpoke channel
+/*
+The 100 Set took 23.6589ms to run.
+The 100 Get took 538.262µs to run.
+The 100 Sets took 1.030366ms to run.
+The 100 Keys took 10.72µs to run.
+The second 100 Keys took 5.222µs to run.
+The 100 Gets took 250.68µs to run.
+*/
 
 //Hetzner raid hdd slowpoke/bolt
 //The 100 Set took 7.057072837s to run./2.602835939s to run.
