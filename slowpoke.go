@@ -352,6 +352,7 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 				})
 				if !kr.asc && byPrefix {
 					//iterate if desc and by prefix
+					found = lenKeys
 					for j := lenKeys - 1; j >= 0; j-- {
 						if len(keysDict[j]) >= len(kr.fromKey) {
 							if bytes.Compare(keysDict[j][:len(kr.fromKey)], kr.fromKey) == 0 {
