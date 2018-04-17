@@ -448,7 +448,7 @@ func TestKeys(t *testing.T) {
 	for _, r := range respref2 {
 		s += string(r)
 	}
-	if s != "10" {
+	if s != "1918" {
 		t.Error("respref2", s)
 	}
 

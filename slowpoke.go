@@ -350,6 +350,18 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 					//bynary search may return not eq result
 					return bytes.Compare(keysDict[i], kr.fromKey) >= 0
 				})
+				if !kr.asc && byPrefix {
+					//iterate if desc and by prefix
+					for j := lenKeys - 1; j >= 0; j-- {
+						if len(keysDict[j]) >= len(kr.fromKey) {
+							if bytes.Compare(keysDict[j][:len(kr.fromKey)], kr.fromKey) == 0 {
+								found = j
+								break
+								//fmt.Println("found:", found, string(keysDict[j][:len(kr.fromKey)]), string(keysDict[j]))
+							}
+						}
+					}
+				}
 				if found == lenKeys {
 					//not found
 					found = -1
