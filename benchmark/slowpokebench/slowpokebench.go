@@ -14,7 +14,7 @@ func main() {
 }
 
 func testSet() {
-	file := "1.db"
+	file := "test/bench.db"
 	err := slowpoke.DeleteFile(file)
 	if err != nil {
 		fmt.Println(err)
@@ -43,15 +43,17 @@ func testSet() {
 	read := func(i int) {
 		defer wg.Done()
 		k := []byte(fmt.Sprintf("%04d", i))
-
 		_, _ = slowpoke.Get(file, k)
+		//fmt.Println(string(res))
 
 	}
-
+	//_ = read
 	t3 := time.Now()
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		read(i)
+		//k := []byte(fmt.Sprintf("%04d", i))
+		//_, _ = Get(file, k)
 	}
 	wg.Wait()
 	t4 := time.Now()
@@ -71,36 +73,26 @@ func testSet() {
 	fmt.Printf("The 100 Sets took %v to run.\n", t6.Sub(t5))
 
 	t7 := time.Now()
-	slowpoke.Keys(file, nil, 0, 0, true)
+	slowpoke.Keys(file, nil, 0, 0, false)
 	t8 := time.Now()
 	fmt.Printf("The 100 Keys took %v to run.\n", t8.Sub(t7))
+
+	t9 := time.Now()
+	keys, _ := slowpoke.Keys(file, nil, 0, 0, false)
+	t10 := time.Now()
+	fmt.Printf("The second 100 Keys took %v to run.\n", t10.Sub(t9))
+
+	t11 := time.Now()
+	_ = slowpoke.Gets(file, keys)
+	t12 := time.Now()
+	fmt.Printf("The 100 Gets took %v to run.\n", t12.Sub(t11))
 	slowpoke.CloseAll()
 }
 
-//macbook 2017 slowpoke synced/bolt
-//The 100 Set took 13.270801ms to run./15.538641ms
-//The 100 Get took 279.128µs to run./191.673µs
-//The 100 Sets took 1.124931ms to run./-
-//The 100 Keys took 8.583µs to run./-
-
-//in memory slowpoke
-//The 100 Set took 455.267µs to run.
-//The 100 Get took 261.503µs to run.
-//The 100 Sets took 264.417µs to run.
-//The 100 Keys took 3.04µs to run.
-
-//in files slowpoke channel
-/*
-The 100 Set took 23.6589ms to run.
-The 100 Get took 538.262µs to run.
-The 100 Sets took 1.030366ms to run.
-The 100 Keys took 10.72µs to run.
-The second 100 Keys took 5.222µs to run.
-The 100 Gets took 250.68µs to run.
-*/
-
-//Hetzner raid hdd slowpoke/bolt
-//The 100 Set took 7.057072837s to run./2.602835939s to run.
-//The 100 Get took 275.011µs to run./268.707µs to run.
-//The 100 Sets took 53.058325ms to run./-
-//The 100 Keys took 16.072µs to run./-
+//macbook 2017 slowpoke vs bolt
+//The 100 Set took 19.440075ms to run./15.538641ms
+//The 100 Get took 671.343µs to run./191.673µs
+//The 100 Sets took 1.139579ms to run./?
+//The 100 Keys took 36.214µs to run./?
+//The second 100 Keys took 20.632µs to run./?
+//The 100 Gets took 206.775µs to run./?
