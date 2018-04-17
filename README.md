@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/recoilme/slowpoke.svg?branch=master)](https://travis-ci.org/recoilme/slowpoke) [![Go Report Card](https://goreportcard.com/badge/github.com/recoilme/slowpoke)](https://goreportcard.com/report/github.com/recoilme/slowpoke)
+
 **Description**
 
 Package slowpoke implements a low-level key/value store on Go standard library. Keys are stored in memory (with persistence), values stored on disk.
