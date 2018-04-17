@@ -43,6 +43,55 @@ func main() {
 }
 ```
 
+**Advanced**
+
+```
+type Post struct {
+	Id       int
+	Content  string
+	Category string
+}
+
+func main() {
+	posts := "test/posts"
+	var pairs [][]byte
+	for i := 0; i < 40; i++ {
+		id := make([]byte, 4)
+		binary.BigEndian.PutUint32(id, uint32(i))
+		post := &Post{Id: i, Content: "Content:" + strconv.Itoa(i), Category: "Category:" + strconv.Itoa(i/10)}
+		b, _ := json.Marshal(post)
+		pairs = append(pairs, id)
+		pairs = append(pairs, b)
+	}
+	//store posts fast
+	slowpoke.Sets(posts, pairs)
+
+	//get last 2 post key with offset 2
+	limit := uint32(2)
+	offset := uint32(2)
+	order := false //desc
+	keys, _ := slowpoke.Keys(posts, nil, limit, offset, order)
+	fmt.Println(keys) //[[0 0 0 37] [0 0 0 36]]
+
+	//get key/ values
+	res := slowpoke.Gets(posts, keys)
+	for k, v := range res {
+		if k%2 == 0 {
+			fmt.Print(binary.BigEndian.Uint32(v))
+		} else {
+			var p Post
+			json.Unmarshal(v, &p)
+			fmt.Println(p)
+		}
+	}
+	//37{37 Content:37 Category:3}
+	//36{36 Content:36 Category:3}
+
+	//free from memory
+	slowpoke.Close(posts)
+}
+```
+
 **Api**
 
 All methods are thread safe. See tests for examples.
@@ -117,6 +166,6 @@ Used in production (master branch)
 //The 100 Get took 671.343µs to run./211.878µs
 //The 100 Sets took 1.139579ms to run./?
 //The 100 Keys took 36.214µs to run./?
-//The second 100 Keys took 20.632µs to run./?
+//The second 100 Keys took 5.632µs to run./?
 //The 100 Gets took 206.775µs to run./?
 ```
