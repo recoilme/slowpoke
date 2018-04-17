@@ -24,7 +24,7 @@ GRPC Server (in development): https://github.com/recoilme/okdb
 
 **Example**
 
-```
+```golang
 package main
 
 import (
@@ -52,7 +52,7 @@ func main() {
 
 **Advanced**
 
-```
+```golang
 type Post struct {
 	Id       int
 	Content  string
