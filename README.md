@@ -56,6 +56,7 @@ type Post struct {
 
 func main() {
 	posts := "test/posts"
+	tags := "test/tags"
 	var pairs [][]byte
 	for i := 0; i < 40; i++ {
 		id := make([]byte, 4)
@@ -64,6 +65,9 @@ func main() {
 		b, _ := json.Marshal(post)
 		pairs = append(pairs, id)
 		pairs = append(pairs, b)
+		tag := fmt.Sprintf("%s:%08d", strconv.Itoa(i/10), i)
+		//store only tags keys
+		slowpoke.Set(tags, []byte(tag), nil)
 	}
 	//store posts fast
 	slowpoke.Sets(posts, pairs)
@@ -91,6 +95,14 @@ func main() {
 
 	//free from memory
 	slowpoke.Close(posts)
+	slowpoke.Close(tags)
+
+	//open Db and read tags by prefix 2:* in ascending order
+	tagsKeys, _ := slowpoke.Keys(tags, []byte("2:*"), 0, 0, true)
+	for _, v := range tagsKeys {
+		fmt.Print(string(v) + ", ")
+	}
+	//2:00000020, 2:00000021, 2:00000022, 2:00000023, 2:00000024, 2:00000025, 2:00000026, 2:00000027, 2:00000028, 2:00000029,
 }
 ```
 
