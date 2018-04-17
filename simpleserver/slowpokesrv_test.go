@@ -1,13 +1,7 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
-	"strconv"
 	"testing"
 )
 
@@ -23,6 +17,7 @@ func TestNil(t *testing.T) {
 }
 
 //run server before testing
+/*
 func TestCatPut(t *testing.T) {
 	//init
 	post := "http://localhost:5000/slowpoke/post/%06d"
@@ -115,7 +110,7 @@ func TestCatPut(t *testing.T) {
 	fmt.Println(postsByCat)
 
 }
-
+*/
 /*
 Output:
 
