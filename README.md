@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/recoilme/slowpoke.svg?branch=master)](https://travis-ci.org/recoilme/slowpoke)
+[![Build Status](https://travis-ci.org/recoilme/slowpoke.svg?branch=master)](https://travis-ci.org/recoilme/slowpoke) [![Build Status](https://travis-ci.org/recoilme/slowpoke.svg?branch=master)](https://travis-ci.org/recoilme/slowpoke)
 
 **Description**
 
