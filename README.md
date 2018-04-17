@@ -15,6 +15,8 @@ The design is very simple. Keys are stored in memory with persistence on disk. V
 
 You may found simple http server here: https://github.com/recoilme/slowpoke/tree/master/simpleserver
 
+GRPC Server (in development): https://github.com/recoilme/okdb
+
 **Example**
 
 ```
