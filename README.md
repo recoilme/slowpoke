@@ -8,7 +8,7 @@ Replace bolt.db with more simple and efficient engine: http://recoilmeblog.tggra
 
 **How it works**
 
-The design is very simple. Keys are stored in memory with persistance too disk. Values stored on disk only.
+The design is very simple. Keys are stored in memory with persistance on disk. Values stored on disk only.
 
 
 **Server**
@@ -49,38 +49,60 @@ All methods are thread safe. See tests for examples.
 
 
 **Set** 
+
 store val and key with sync at end
 
 File - may be existing file or new 
+
 If path to file contains dirs - dirs will be created
+
 If val is nil - will store only key
 
 
-**Get** return value by key or nil and error
-// Get will open Db if it closed
-// return error if any
+**Get** 
 
-**Keys** return keys in ascending  or descending order (false - descending,true - ascending)
-// if limit == 0 return all keys
-// if offset>0 - skip offset records
-// If from not nil - return keys after from (from not included)
-// If last byte of from == "*" - return keys with this prefix
+return value by key or nil and error
 
-**Close** - close Db and free used memory
-// It run finalizer and cancel goroutine
+Get will open Db if it closed
 
-**Open** - (call automatically on all commands) - open/create file and read keys to memory
+return error if any
+
+**Keys** 
+
+return keys in ascending  or descending order (false - descending,true - ascending)
+
+If limit == 0 return all keys
+
+If offset>0 - skip offset records
+
+If from not nil - return keys after from (from not included)
+
+If last byte of from == "*" - return keys with this prefix
+
+**Close** 
+
+close Db and free used memory
+
+It run finalizer and cancel goroutine
+
+**Open** 
+
+(call automatically on all commands) - open/create file and read keys to memory
 
 
-**CloseAll** - close all opened files and remove keys from memory
+**CloseAll** 
+
+close all opened files and remove keys from memory
 
 
-**DeleteFile** - remove files from disk
+**DeleteFile** 
+
+remove files from disk
 
 
 **Used libraries**
 
--
+no
 
 **Status**
 
