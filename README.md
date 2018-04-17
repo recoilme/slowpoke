@@ -19,6 +19,10 @@ You may found simple http server here: https://github.com/recoilme/slowpoke/tree
 
 GRPC Server (in development): https://github.com/recoilme/okdb
 
+**GoDoc**
+
+GoDoc: https://godoc.org/github.com/recoilme/slowpoke
+
 **Example**
 
 ```
