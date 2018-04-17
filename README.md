@@ -1,6 +1,6 @@
 **Description**
 
-Package slowpoke implements a low-level key/value store on Go standart library. Keys are stored in memory (with persistence), values stored on disk.
+Package slowpoke implements a low-level key/value store on Go standard library. Keys are stored in memory (with persistence), values stored on disk.
 
 **Motivation**
 
@@ -8,7 +8,7 @@ Replace bolt.db with more simple and efficient engine: http://recoilmeblog.tggra
 
 **How it works**
 
-The design is very simple. Keys are stored in memory with persistance on disk. Values stored on disk only.
+The design is very simple. Keys are stored in memory with persistence on disk. Values stored on disk only.
 
 
 **Server**
@@ -48,7 +48,7 @@ func main() {
 All methods are thread safe. See tests for examples.
 
 
-**Set** 
+- **Set** 
 
 store val and key with sync at end
 
@@ -59,7 +59,7 @@ If path to file contains dirs - dirs will be created
 If val is nil - will store only key
 
 
-**Get** 
+- **Get** 
 
 return value by key or nil and error
 
@@ -67,7 +67,7 @@ Get will open Db if it closed
 
 return error if any
 
-**Keys** 
+- **Keys** 
 
 return keys in ascending  or descending order (false - descending,true - ascending)
 
@@ -79,25 +79,25 @@ If from not nil - return keys after from (from not included)
 
 If last byte of from == "*" - return keys with this prefix
 
-**Close** 
+- **Close** 
 
 close Db and free used memory
 
 It run finalizer and cancel goroutine
 
-**Open** 
+- **Open** 
 
 (call automatically on all commands) - open/create file and read keys to memory
 
 
-**CloseAll** 
+- **CloseAll** 
 
 close all opened files and remove keys from memory
 
 
-**DeleteFile** 
+- **DeleteFile** 
 
-remove files from disk
+delete files from disk (all data will be lost!)
 
 
 **Used libraries**
