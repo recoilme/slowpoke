@@ -48,17 +48,19 @@ func main() {
 All methods are thread safe. See tests for examples.
 
 
-**Set** store val and key with sync at end
-// File - may be existing file or new
-// If path to file contains dirs - dirs will be created
-// If val is nil - will store only key
+**Set** 
+store val and key with sync at end
+
+File - may be existing file or new 
+If path to file contains dirs - dirs will be created
+If val is nil - will store only key
 
 
 **Get** return value by key or nil and error
 // Get will open Db if it closed
 // return error if any
 
-**Keys*** return keys in ascending  or descending order (false - descending,true - ascending)
+**Keys** return keys in ascending  or descending order (false - descending,true - ascending)
 // if limit == 0 return all keys
 // if offset>0 - skip offset records
 // If from not nil - return keys after from (from not included)
