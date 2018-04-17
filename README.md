@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/recoilme/slowpoke.svg?branch=master)](https://travis-ci.org/recoilme/slowpoke) [![Go Report Card](https://goreportcard.com/badge/github.com/recoilme/slowpoke)](https://goreportcard.com/report/github.com/recoilme/slowpoke)
+[![Documentation](https://godoc.org/github.com/recoilme/slowpoke?status.svg)](https://godoc.org/github.com/recoilme/slowpoke)
 
 **Description**
 
@@ -18,10 +19,6 @@ The design is very simple. Keys are stored in memory with persistence on disk. V
 You may found simple http server here: https://github.com/recoilme/slowpoke/tree/master/simpleserver
 
 GRPC Server (in development): https://github.com/recoilme/okdb
-
-**GoDoc**
-
-GoDoc: https://godoc.org/github.com/recoilme/slowpoke
 
 **Example**
 
