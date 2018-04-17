@@ -18,30 +18,29 @@ You may found simple http server here: https://github.com/recoilme/slowpoke/tree
 **Example**
 
 ```
-// Create/open file 1.db.idx and store key: []byte("1")
-// Create/open file 1.db and store val: []byte("11")
-Set("1.db", []byte("1"), []byte("11"))
+package main
 
-// add key 2 and val 22
-err = Set("1.db", []byte("2"), []byte("22"))
+import (
+	"fmt"
 
-// get value fo key 2
-res, _ := Get("1.db", []byte("2"))
-logg(res)
+	"github.com/recoilme/slowpoke"
+)
 
-// delete key 2
-Delete("1.db", []byte("2"))
-
-// get first 10 keys in descending order 
-res, _ := Keys("1.db", nil, 0, 10, false)
-var s = ""
-for _, r := range res {
-  s += string(r)
+func main() {
+	// create database
+	file := "test/example.db"
+	// close all opened database
+	defer slowpoke.CloseAll()
+	// init key/val
+	key := []byte("foo")
+	val := []byte("bar")
+	//store
+	slowpoke.Set(file, key, val)
+	// get
+	res, _ := slowpoke.Get(file, key)
+	//result
+	fmt.Println(string(res))
 }
-logg(s)
-
-// Close all opened files
-CloseAll()
 ```
 
 **Api**
@@ -49,120 +48,51 @@ CloseAll()
 All methods are thread safe. See tests for examples.
 
 
-Set - put or replace key/val. Keys stored in memory and in log file (*.idx). Values - on disk only.
-If val == nil - stored only keys. Useful for indexing.
+**Set** store val and key with sync at end
+// File - may be existing file or new
+// If path to file contains dirs - dirs will be created
+// If val is nil - will store only key
 
 
-Get - return value by key
+**Get** return value by key or nil and error
+// Get will open Db if it closed
+// return error if any
 
-
-Keys - return keys
-```
-// Keys return keys in asc/desc order (false - descending,true - ascending)
+**Keys*** return keys in ascending  or descending order (false - descending,true - ascending)
 // if limit == 0 return all keys
-// offset - skip count records
+// if offset>0 - skip offset records
 // If from not nil - return keys after from (from not included)
-// If last byte of from == "*" - use as prefix
-```
+// If last byte of from == "*" - return keys with this prefix
 
-Close - close file and remove keys from memory
+**Close** - close Db and free used memory
+// It run finalizer and cancel goroutine
 
-
-Open - (call automatically) - open/create file and read keys to memory
-
-
-CloseAll - close all opened files and remove keys from memory
+**Open** - (call automatically on all commands) - open/create file and read keys to memory
 
 
-DeleteFile - remove files from disk
+**CloseAll** - close all opened files and remove keys from memory
+
+
+**DeleteFile** - remove files from disk
 
 
 **Used libraries**
 
-github.com/recoilme/syncfile - threadsafe read-write file
-
-github.com/tidwall/btree - Btree
+-
 
 **Status**
 
 Used in production (master branch)
 
 
-**Async read example**
-
-```
-func TestAsyncKeys(t *testing.T) {
-	var err error
-	f := "AsyncKeys.db"
-	DeleteFile(f)
-	_, err = Open(f)
-	ch(err, t)
-	defer Close(f)
-	append := func(i int) {
-
-		k := []byte(fmt.Sprintf("%02d", i))
-		v := []byte("Val:" + strconv.Itoa(i))
-		err := Set(f, k, v)
-		ch(err, t)
-
-	}
-	for i := 1; i <= 20; i++ {
-		append(i)
-	}
-
-	readmessages := make(chan string)
-	var wg sync.WaitGroup
-
-	read := func(i int) {
-		defer wg.Done()
-		slice, _ := Keys(f, nil, 1, i-1, true)
-		var s = ""
-		for _, r := range slice {
-			s += string(r)
-		}
-		readmessages <- fmt.Sprintf("read N:%d  content:%s", i, s)
-	}
-
-	for i := 1; i <= 10; i++ {
-		wg.Add(1)
-		go read(i)
-	}
-	go func() {
-		for i := range readmessages {
-			fmt.Println(i)
-		}
-	}()
-
-	wg.Wait()
-}
-
-//output
-/*
-read N:5  content:05
-read N:4  content:04
-read N:9  content:09
-read N:10  content:10
-read N:2  content:02
-read N:3  content:03
-read N:8  content:08
-read N:6  content:06
-read N:1  content:01
-read N:7  content:07
-*/
-```
-
 **Benchmark**
 
 ```
-//macbook 2017 slowpoke/bolt
-//The 100 Set took 13.270801ms to run./15.538641ms
-//The 100 Get took 279.128µs to run./191.673µs
-//The 100 Sets took 1.124931ms to run./-
-//The 100 Keys took 8.583µs to run./-
-
-//Hetzner raid hdd slowpoke/bolt
-//The 100 Set took 7.057072837s to run./2.602835939s to run.
-//The 100 Get took 275.011µs to run./268.707µs to run.
-//The 100 Sets took 53.058325ms to run./-
-//The 100 Keys took 16.072µs to run./-
+//macbook 2017 slowpoke vs bolt
+//The 100 Set took 19.440075ms to run./19.272079ms
+//The 100 Get took 671.343µs to run./211.878µs
+//The 100 Sets took 1.139579ms to run./?
+//The 100 Keys took 36.214µs to run./?
+//The second 100 Keys took 20.632µs to run./?
+//The 100 Gets took 206.775µs to run./?
 ```
