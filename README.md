@@ -5,6 +5,8 @@
 
 Package slowpoke implements a low-level key/value store on Go standard library. Keys are stored in memory (with persistence), values stored on disk.
 
+![slowpoke](http://tggram.com/media/recoilme/photos/file_488344.jpg)
+
 **Motivation**
 
 Replace bolt.db with more simple and efficient engine: http://recoilmeblog.tggram.com/post/96
