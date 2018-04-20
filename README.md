@@ -179,12 +179,33 @@ Used in production (master branch)
 
 **Benchmark**
 
+
+macbook 2017 slowpoke vs bolt
+
 ```
-//macbook 2017 slowpoke vs bolt
 //The 100 Set took 19.440075ms to run./19.272079ms
 //The 100 Sets took 1.139579ms to run./?
 //The 100 Get took 671.343µs to run./211.878µs
 //The 100 Gets took 206.775µs to run./?
 //The 100 Keys took 36.214µs to run./?
 //The second 100 Keys took 5.632µs to run./?
+```
+
+macbook 2017 slowpoke vs badger
+
+
+```
+//https://github.com/recoilme/datastore_benchmarks
+
+Slowpoke:
+Put time: 1.16221931s
+Get time: 805.776917ms
+Db size: 1 048 570 bytes (Zero bytes overhead)
+Index size: 5 033 136 bytes
+
+Badger:
+Put time: 902.318742ms
+Get time: 723.95486ms
+Vlog size: 7 247 634 bytes
+Sst size: 6 445 276 bytes
 ```
