@@ -529,15 +529,15 @@ func TestGob(t *testing.T) {
 		Category string
 	}
 
-	for i := 0; i < 20; i++ {
+	for i := -4; i < 20; i++ {
 		post := &Post{Id: i, Content: "Content:" + strconv.Itoa(i)}
-		err := SetGob(file, i, post)
+		err := SetGob(file, post.Id, post)
 		ch(err, t)
 	}
 
-	for i := 0; i < 20; i++ {
+	for i := -4; i < 20; i++ {
 		var post = new(Post)
-		err := GetGob(file, i, post)
+		err := GetGob(file, (i), post)
 		ch(err, t)
 		//fmt.Println("i:", i, "Post:", post)
 	}
@@ -567,4 +567,17 @@ func TestGob(t *testing.T) {
 	} else {
 		t.Error(err)
 	}
+
+	keysAsc, _ := Keys(file, nil, 0, 0, true)
+
+	for _, v := range keysAsc {
+		buf.Write(v)
+		var ks int
+		if err := gob.NewDecoder(&buf).Decode(&ks); err == nil {
+			//с сортировкой отрицательных чисел будет хрень кнчн
+			//fmt.Println(ks)
+			//0,-1,1,-2,2...
+		}
+	}
+
 }

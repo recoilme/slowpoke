@@ -635,6 +635,7 @@ func Set(file string, key []byte, val []byte) (err error) {
 	return err
 }
 
+// SetGob - experimental future for lazy usage, see tests
 func SetGob(file string, key interface{}, val interface{}) (err error) {
 	db, err := Open(file)
 	//fmt.Println("set", db, err)
@@ -690,27 +691,29 @@ func Get(file string, key []byte) (val []byte, err error) {
 	return val, err
 }
 
+// GetGob - experimental future for lazy usage, see tests
 func GetGob(file string, key interface{}, val interface{}) (err error) {
 	db, err := Open(file)
 	//fmt.Println("set", db, err)
 	if err != nil {
 		return err
 	}
-	bufKey := bytes.Buffer{}
-	bufVal := bytes.Buffer{}
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer bufPool.Put(buf)
+	buf.Reset()
 
-	err = gob.NewEncoder(&bufKey).Encode(key)
+	err = gob.NewEncoder(buf).Encode(key)
 	if err != nil {
 		return err
 	}
 
-	bin, err := db.readKey(string(bufKey.Bytes()))
-
+	bin, err := db.readKey(string(buf.Bytes()))
+	buf.Reset()
 	if err != nil {
 		return err
 	}
-	bufVal.Write(bin)
-	err = gob.NewDecoder(&bufVal).Decode(val)
+	buf.Write(bin)
+	err = gob.NewDecoder(buf).Decode(val)
 
 	return err
 
