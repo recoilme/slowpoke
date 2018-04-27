@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"encoding/gob"
 	"errors"
 	"io/ioutil"
 	"os"
@@ -634,6 +635,29 @@ func Set(file string, key []byte, val []byte) (err error) {
 	return err
 }
 
+// SetGob - experimental future for lazy usage, see tests
+func SetGob(file string, key interface{}, val interface{}) (err error) {
+	db, err := Open(file)
+	//fmt.Println("set", db, err)
+	if err != nil {
+		return err
+	}
+	bufKey := bytes.Buffer{}
+	bufVal := bytes.Buffer{}
+
+	err = gob.NewEncoder(&bufKey).Encode(key)
+	if err != nil {
+		return err
+	}
+	err = gob.NewEncoder(&bufVal).Encode(val)
+	if err != nil {
+		return err
+	}
+
+	err = db.setKey(string(bufKey.Bytes()), bufVal.Bytes())
+	return err
+}
+
 // Open open/create Db (with dirs)
 // This operation is locked by mutex
 // Return error if any
@@ -665,6 +689,34 @@ func Get(file string, key []byte) (val []byte, err error) {
 	}
 	val, err = db.readKey(string(key))
 	return val, err
+}
+
+// GetGob - experimental future for lazy usage, see tests
+func GetGob(file string, key interface{}, val interface{}) (err error) {
+	db, err := Open(file)
+	//fmt.Println("set", db, err)
+	if err != nil {
+		return err
+	}
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer bufPool.Put(buf)
+	buf.Reset()
+
+	err = gob.NewEncoder(buf).Encode(key)
+	if err != nil {
+		return err
+	}
+
+	bin, err := db.readKey(string(buf.Bytes()))
+	buf.Reset()
+	if err != nil {
+		return err
+	}
+	buf.Write(bin)
+	err = gob.NewDecoder(buf).Decode(val)
+
+	return err
+
 }
 
 // Keys return keys in ascending  or descending order (false - descending,true - ascending)
