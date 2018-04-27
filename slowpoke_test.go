@@ -5,7 +5,9 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"fmt"
+	"math/rand"
 	"runtime"
+	"sort"
 	"strconv"
 	"sync"
 	"testing"
@@ -578,6 +580,46 @@ func TestGob(t *testing.T) {
 			//fmt.Println(ks)
 			//0,-1,1,-2,2...
 		}
+	}
+
+}
+
+func Prepend(items []interface{}, item interface{}) []interface{} {
+	return append([]interface{}{item}, items...)
+}
+func TestSortedInsert(t *testing.T) {
+	var keys = make([][]byte, 0)
+	ins := func(b []byte) {
+		keysLen := len(keys)
+		found := sort.Search(keysLen, func(i int) bool {
+			return bytes.Compare(keys[i], b) >= 0
+		})
+		if found == 0 {
+			//prepend
+			keys = append([][]byte{b}, keys...)
+
+		} else {
+			if found >= keysLen {
+				//not found - postpend ;)
+				keys = append(keys, b)
+			} else {
+				//found
+				keys = append(keys[:found-1], b)
+				keys = append(keys, keys[found:]...)
+			}
+		}
+	}
+	for i := 20; i >= 0; i-- {
+		s1 := rand.NewSource(time.Now().UnixNano())
+		r := rand.New(s1)
+		i := r.Intn(42)
+		logg(i)
+		k := []byte(fmt.Sprintf("%04d", i))
+		ins(k)
+	}
+	fmt.Println(len(keys))
+	for k, j := range keys {
+		fmt.Println(k, string(j))
 	}
 
 }
