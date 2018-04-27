@@ -5,6 +5,10 @@
 
 Package slowpoke implements a low-level key/value store on Go standard library. Keys are stored in memory (with persistence), values stored on disk.
 
+
+![Description on russian](https://habr.com/post/354224/)
+
+
 ![slowpoke](http://tggram.com/media/recoilme/photos/file_488344.jpg)
 
 **Motivation**
@@ -22,7 +26,7 @@ You may found simple http server here: https://github.com/recoilme/slowpoke/tree
 
 GRPC Server (in development): https://github.com/recoilme/okdb
 
-**Example**
+**Basic example**
 
 ```golang
 package main
@@ -50,7 +54,35 @@ func main() {
 }
 ```
 
-**Advanced**
+**Lazy example**
+
+```golang
+func TestGob(t *testing.T) {
+  file := "test/gob.db"
+	DeleteFile(file)
+	defer CloseAll()
+	type Post struct {
+		Id       int
+		Content  string
+		Category string
+	}
+
+	for i := 0; i < 20; i++ {
+		post := &Post{Id: i, Content: "Content:" + strconv.Itoa(i)}
+		err := SetGob(file, post.Id, post)
+		ch(err, t)
+	}
+
+	for i := 0; i < 20; i++ {
+		var post = new(Post)
+		err := GetGob(file, i, post)
+		ch(err, t)
+		fmt.Println("i:", i, "Post:", post)
+	}
+}
+```
+
+**Advanced example**
 
 ```golang
 type Post struct {
@@ -113,64 +145,48 @@ func main() {
 
 **Api**
 
-All methods are thread safe. See tests for examples.
+All methods are thread safe.
 
 
-- **Set** 
+- **Set/Sets/SetGob** 
 
-store val and key with sync at end
-
-File - may be existing file or new 
-
-If path to file contains dirs - dirs will be created
-
-If val is nil - will store only key
+Store val and key with sync at end. File - may be existing file or new 
 
 
-- **Get** 
+- **Get/Gets/GetGob** 
 
-return value by key or nil and error
-
-Get will open Db if it closed
-
-return error if any
+return value by key or nil and error. Get will open Db if it closed
 
 - **Keys** 
 
-return keys in ascending  or descending order (false - descending,true - ascending)
+Return keys in ascending/descending order 
 
-If limit == 0 return all keys
+With limit/offset
 
-If offset>0 - skip offset records
-
-If from not nil - return keys after from (from not included)
+If from not nil - return keys after from
 
 If last byte of from == "*" - return keys with this prefix
 
-- **Close** 
+- **Open/Close** 
 
-close Db and free used memory
+Open - open/create file with dirs and read keys
 
-It run finalizer and cancel goroutine
-
-- **Open** 
-
-(call automatically on all commands) - open/create file and read keys to memory
+Close - close Db and free used memory
 
 
 - **CloseAll** 
 
-close all opened files and remove keys from memory
+Close all opened files and remove keys from memory
 
 
 - **DeleteFile** 
 
-delete files from disk (all data will be lost!)
+Delete files from disk (all data will be lost!)
 
 
 **Used libraries**
 
-no
+-
 
 **Status**
 
