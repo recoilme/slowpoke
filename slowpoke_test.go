@@ -3,6 +3,7 @@ package slowpoke
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"fmt"
 	"runtime"
 	"strconv"
@@ -520,6 +521,7 @@ func TestWriteRead(t *testing.T) {
 
 func TestGob(t *testing.T) {
 	file := "test/gob.db"
+	DeleteFile(file)
 	defer CloseAll()
 	type Post struct {
 		Id       int
@@ -527,16 +529,42 @@ func TestGob(t *testing.T) {
 		Category string
 	}
 
-	for i := 0; i < 40; i++ {
+	for i := 0; i < 20; i++ {
 		post := &Post{Id: i, Content: "Content:" + strconv.Itoa(i)}
 		err := SetGob(file, i, post)
 		ch(err, t)
 	}
 
-	for i := 0; i < 40; i++ {
+	for i := 0; i < 20; i++ {
 		var post = new(Post)
 		err := GetGob(file, i, post)
 		ch(err, t)
-		fmt.Println("i:", i, "Post:", post)
+		//fmt.Println("i:", i, "Post:", post)
+	}
+	// mix gob with other methods
+	keys, err := Keys(file, nil, 1, 0, false)
+	ch(err, t)
+	fmt.Println(keys)
+	var k int
+	buf := bytes.Buffer{}
+	buf.Write(keys[0])
+	if err := gob.NewDecoder(&buf).Decode(&k); err == nil {
+		if k != 19 {
+			t.Error("not 19")
+		}
+	} else {
+		t.Error(err)
+	}
+
+	bin, err := Get(file, keys[0])
+	buf.Write(bin)
+	p := &Post{}
+	if err := gob.NewDecoder(&buf).Decode(&p); err == nil {
+		fmt.Println(p)
+		if p.Id != 19 {
+			t.Error("gob not 19")
+		}
+	} else {
+		t.Error(err)
 	}
 }
