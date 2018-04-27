@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 
 	"github.com/recoilme/slowpoke"
@@ -30,6 +33,7 @@ func main() {
 	//result
 	fmt.Println(string(res))
 	advanced()
+	gobExample()
 }
 
 func advanced() {
@@ -81,4 +85,41 @@ func advanced() {
 		fmt.Print(string(v) + ", ")
 	}
 	//2:00000020, 2:00000021, 2:00000022, 2:00000023, 2:00000024, 2:00000025, 2:00000026, 2:00000027, 2:00000028, 2:00000029,
+}
+
+func gobExample() {
+	file := "test/gob"
+	i := 1
+
+	// init encoder, decoder
+	bufIn := bytes.Buffer{}
+	bufOut := bytes.Buffer{}
+	enc := gob.NewEncoder(&bufIn)
+	dec := gob.NewDecoder(&bufOut)
+
+	//create post
+	postIn := &Post{Id: i, Content: "Content:" + strconv.Itoa(i)}
+	key := make([]byte, 4)
+	binary.BigEndian.PutUint32(key, uint32(i))
+
+	//encode post
+	defer slowpoke.Close(file)
+	if err := enc.Encode(&postIn); err == nil {
+		// store post 2 slowpoke
+		err = slowpoke.Set(file, key, bufIn.Bytes())
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	//decode post
+	postOut := &Post{}
+	if bin, err := slowpoke.Get(file, key); err == nil {
+		bufOut.Write(bin)
+		if err := dec.Decode(&postOut); err == nil {
+			fmt.Println("Post out:")
+			fmt.Println("Content:", postOut.Content, "Id:", postOut.Id)
+		}
+	}
+
 }
