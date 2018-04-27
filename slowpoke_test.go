@@ -517,3 +517,26 @@ func TestWriteRead(t *testing.T) {
 	wg.Wait()
 
 }
+
+func TestGob(t *testing.T) {
+	file := "test/gob.db"
+	defer CloseAll()
+	type Post struct {
+		Id       int
+		Content  string
+		Category string
+	}
+
+	for i := 0; i < 40; i++ {
+		post := &Post{Id: i, Content: "Content:" + strconv.Itoa(i)}
+		err := SetGob(file, i, post)
+		ch(err, t)
+	}
+
+	for i := 0; i < 40; i++ {
+		var post = new(Post)
+		err := GetGob(file, i, post)
+		ch(err, t)
+		fmt.Println("i:", i, "Post:", post)
+	}
+}
