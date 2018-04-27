@@ -58,7 +58,7 @@ func main() {
 
 ```golang
 func TestGob(t *testing.T) {
-  file := "test/gob.db"
+	file := "test/gob.db"
 	DeleteFile(file)
 	defer CloseAll()
 	type Post struct {
