@@ -185,8 +185,7 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 	// valDict map with key and address of values
 	valDict := make(map[string]*Cmd)
 	// keysDict store ordered slice of keys
-	var keysDict [][]byte
-	keysDict = make([][]byte, 0)
+	var keysDict = make([][]byte, 0)
 
 	//delete key from slice keysDict
 	deleteFromKeys := func(b []byte) {
@@ -355,7 +354,7 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 					found = lenKeys
 					for j := lenKeys - 1; j >= 0; j-- {
 						if len(keysDict[j]) >= len(kr.fromKey) {
-							if bytes.Compare(keysDict[j][:len(kr.fromKey)], kr.fromKey) == 0 {
+							if bytes.Equal(keysDict[j][:len(kr.fromKey)], kr.fromKey) {
 								found = j
 								break
 								//fmt.Println("found:", found, string(keysDict[j][:len(kr.fromKey)]), string(keysDict[j]))
