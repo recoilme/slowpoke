@@ -258,7 +258,8 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 		case 0:
 			if _, exists := valDict[strkey]; !exists {
 				//write new key at keys store
-				keysDict = append(keysDict, key)
+				//keysDict = append(keysDict, key)
+				appendAsc(key)
 			}
 			valDict[strkey] = cmd
 		case 1:
@@ -510,7 +511,8 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 					keyStr := string(sr.pairs[i-1])
 					if _, exists := valDict[keyStr]; !exists {
 						//write new key at keys store
-						keysDict = append(keysDict, sr.pairs[i-1])
+						appendAsc(sr.pairs[i-1])
+						//keysDict = append(keysDict, sr.pairs[i-1])
 					}
 					valDict[keyStr] = cmd
 
