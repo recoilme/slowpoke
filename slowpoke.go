@@ -191,9 +191,9 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 	//delete key from slice keysDict
 	deleteFromKeys := func(b []byte) {
 		//fmt.Printf("before sort keys:%+v\n", keysDict)
-		sort.Slice(keysDict, func(i, j int) bool {
-			return bytes.Compare(keysDict[i], keysDict[j]) <= 0
-		})
+		//sort.Slice(keysDict, func(i, j int) bool {
+		//return bytes.Compare(keysDict[i], keysDict[j]) <= 0
+		//})
 		//fmt.Printf("after sort keys:%+v\n", keysDict)
 		found := sort.Search(len(keysDict), func(i int) bool {
 			return bytes.Compare(keysDict[i], b) >= 0
@@ -203,6 +203,30 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 			//is found return 0 if not found?
 			if bytes.Equal(keysDict[found], b) {
 				keysDict = append(keysDict[:found], keysDict[found+1:]...)
+			}
+		}
+	}
+
+	//appendAsc insert key in slice in ascending order
+	appendAsc := func(b []byte) {
+		keysLen := len(keysDict)
+		found := sort.Search(keysLen, func(i int) bool {
+			return bytes.Compare(keysDict[i], b) >= 0
+		})
+		if found == 0 {
+			//prepend
+			keysDict = append([][]byte{b}, keysDict...)
+
+		} else {
+			if found >= keysLen {
+				//not found - postpend ;)
+				keysDict = append(keysDict, b)
+			} else {
+				//found
+				//https://blog.golang.org/go-slices-usage-and-internals
+				keysDict = append(keysDict, nil)           //grow origin slice capacity if needed
+				copy(keysDict[found+1:], keysDict[found:]) //ha-ha, lol, 20x faster
+				keysDict[found] = b
 			}
 		}
 	}
@@ -234,7 +258,8 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 		case 0:
 			if _, exists := valDict[strkey]; !exists {
 				//write new key at keys store
-				keysDict = append(keysDict, key)
+				//keysDict = append(keysDict, key)
+				appendAsc(key)
 			}
 			valDict[strkey] = cmd
 		case 1:
@@ -295,8 +320,8 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 				//fmt.Println(fv, wr.readKey, string(wr.writeVal), cmd.Seek, err)
 
 				//write new key at keys store
-				keysDict = append(keysDict, []byte(wr.readKey))
-
+				//keysDict = append(keysDict, []byte(wr.readKey))
+				appendAsc([]byte(wr.readKey))
 				if err == nil {
 					newSeek, err = writeKey(fk, 0, cmd.Seek, cmd.Size, []byte(wr.readKey), true, -1)
 					cmd.KeySeek = uint32(newSeek)
@@ -325,14 +350,15 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 
 			//sort slice
 			//TODO may be store sort state in bool
-			sorted := sort.SliceIsSorted(keysDict, func(i, j int) bool {
-				return bytes.Compare(keysDict[i], keysDict[j]) <= 0
-			})
-			if !sorted {
-				sort.Slice(keysDict, func(i, j int) bool {
+			/*
+				sorted := sort.SliceIsSorted(keysDict, func(i, j int) bool {
 					return bytes.Compare(keysDict[i], keysDict[j]) <= 0
 				})
-			}
+				if !sorted {
+					sort.Slice(keysDict, func(i, j int) bool {
+						return bytes.Compare(keysDict[i], keysDict[j]) <= 0
+					})
+				}*/
 			var result [][]byte
 			result = make([][]byte, 0)
 			lenKeys := len(keysDict)
@@ -485,7 +511,8 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 					keyStr := string(sr.pairs[i-1])
 					if _, exists := valDict[keyStr]; !exists {
 						//write new key at keys store
-						keysDict = append(keysDict, sr.pairs[i-1])
+						appendAsc(sr.pairs[i-1])
+						//keysDict = append(keysDict, sr.pairs[i-1])
 					}
 					valDict[keyStr] = cmd
 
