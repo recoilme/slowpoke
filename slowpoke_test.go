@@ -589,6 +589,7 @@ func Prepend(items []interface{}, item interface{}) []interface{} {
 }
 func TestSortedInsert(t *testing.T) {
 	var keys = make([][]byte, 0)
+	var keysSort = make([][]byte, 0)
 	ins := func(b []byte) {
 		keysLen := len(keys)
 		found := sort.Search(keysLen, func(i int) bool {
@@ -604,22 +605,74 @@ func TestSortedInsert(t *testing.T) {
 				keys = append(keys, b)
 			} else {
 				//found
-				keys = append(keys[:found-1], b)
-				keys = append(keys, keys[found:]...)
+				//fmt.Println("found", found, "left", keys[:found], "r", keys[found:], "b", b)
+				//temp slice for copy
+				//https://blog.golang.org/go-slices-usage-and-internals
+				keys = append(keys, nil)
+				copy(keys[found+1:], keys[found:])
+				keys[found] = b
+				//fmt.Println("keys", keys)
+				//t := make([][]byte, keysLen+1)
+				//copy(t[:found], keys[:found])
+				//t[found] = b
+				//copy(t[found+1:], keys[found:])
+				//keys = t
 			}
 		}
 	}
-	for i := 20; i >= 0; i-- {
+	//ins(nil)
+	for i := 10000; i >= 0; i-- {
 		s1 := rand.NewSource(time.Now().UnixNano())
 		r := rand.New(s1)
 		i := r.Intn(42)
-		logg(i)
+
 		k := []byte(fmt.Sprintf("%04d", i))
-		ins(k)
-	}
-	fmt.Println(len(keys))
-	for k, j := range keys {
-		fmt.Println(k, string(j))
+
+		//ins(k)
+		keysSort = append(keysSort, k)
 	}
 
+	t5 := time.Now()
+	for _, v := range keysSort {
+		//b := []byte(fmt.Sprintf("%04d", v))
+		ins(v)
+		//fmt.Println(k, string(j))
+	}
+	t6 := time.Now()
+	fmt.Printf("The 10000 Sorted insert took %v to run.\n", t6.Sub(t5))
+
+	//10000 insert- 1s :(
+	t1 := time.Now()
+	sort.Slice(keysSort, func(i, j int) bool {
+		return bytes.Compare(keysSort[i], keysSort[j]) <= 0
+	})
+	t2 := time.Now()
+	fmt.Printf("The 10000 Sort took %v to run.\n", t2.Sub(t1))
+	//10000 sort - 1.360s // 8.265034ms
+	//insert faster :)
+
+	t3 := time.Now()
+	sort.Slice(keysSort, func(i, j int) bool {
+		return bytes.Compare(keysSort[i], keysSort[j]) <= 0
+	})
+	t4 := time.Now()
+	fmt.Printf("The 10000 2 Sort took %v to run.\n", t4.Sub(t3))
+
+	/*
+		output
+		The 10000 Sorted insert took 1.772675355s to run.
+		The 10000 Sort took 14.423865ms to run.
+		The 10000 2 Sort took 8.995405ms to run.
+
+		The 10000 Sorted insert took 43.034722ms to run.
+		The 10000 Sort took 12.715538ms to run.
+		The 10000 2 Sort took 19.648586ms to run.
+		PASS
+	*/
+	for k, v := range keysSort {
+		//fmt.Println(k, string(v), string(keys[k]))
+		if string(v) != string(keys[k]) {
+			t.Error("keys != keyssorted")
+		}
+	}
 }
