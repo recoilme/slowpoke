@@ -605,18 +605,10 @@ func TestSortedInsert(t *testing.T) {
 				keys = append(keys, b)
 			} else {
 				//found
-				//fmt.Println("found", found, "left", keys[:found], "r", keys[found:], "b", b)
-				//temp slice for copy
 				//https://blog.golang.org/go-slices-usage-and-internals
-				keys = append(keys, nil)
-				copy(keys[found+1:], keys[found:])
+				keys = append(keys, nil)           //grow origin slice capacity if needed
+				copy(keys[found+1:], keys[found:]) //ha-ha, lol, 20x faster
 				keys[found] = b
-				//fmt.Println("keys", keys)
-				//t := make([][]byte, keysLen+1)
-				//copy(t[:found], keys[:found])
-				//t[found] = b
-				//copy(t[found+1:], keys[found:])
-				//keys = t
 			}
 		}
 	}
@@ -634,9 +626,7 @@ func TestSortedInsert(t *testing.T) {
 
 	t5 := time.Now()
 	for _, v := range keysSort {
-		//b := []byte(fmt.Sprintf("%04d", v))
 		ins(v)
-		//fmt.Println(k, string(j))
 	}
 	t6 := time.Now()
 	fmt.Printf("The 10000 Sorted insert took %v to run.\n", t6.Sub(t5))
