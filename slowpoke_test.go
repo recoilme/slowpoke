@@ -472,7 +472,7 @@ func TestKeys(t *testing.T) {
 		s += string(r)
 	}
 	if s != "10111213141516171819" {
-		t.Error("resprefasc2", s)
+		t.Error("resprefasc2", s, err)
 	}
 }
 
@@ -559,6 +559,7 @@ func TestGob(t *testing.T) {
 	}
 
 	bin, err := Get(file, keys[0])
+	ch(err, t)
 	buf.Write(bin)
 	p := &Post{}
 	if err := gob.NewDecoder(&buf).Decode(&p); err == nil {
