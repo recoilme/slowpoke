@@ -12,7 +12,7 @@ import (
 	"github.com/recoilme/slowpoke"
 )
 
-type Post struct {
+type post struct {
 	Id       int
 	Content  string
 	Category string
@@ -43,7 +43,7 @@ func advanced() {
 	for i := 0; i < 40; i++ {
 		id := make([]byte, 4)
 		binary.BigEndian.PutUint32(id, uint32(i))
-		post := &Post{Id: i, Content: "Content:" + strconv.Itoa(i), Category: "Category:" + strconv.Itoa(i/10)}
+		post := &post{Id: i, Content: "Content:" + strconv.Itoa(i), Category: "Category:" + strconv.Itoa(i/10)}
 		b, _ := json.Marshal(post)
 		pairs = append(pairs, id)
 		pairs = append(pairs, b)
@@ -67,7 +67,7 @@ func advanced() {
 		if k%2 == 0 {
 			fmt.Print(binary.BigEndian.Uint32(v))
 		} else {
-			var p Post
+			var p post
 			json.Unmarshal(v, &p)
 			fmt.Println(p)
 		}
@@ -98,7 +98,7 @@ func gobExample() {
 	dec := gob.NewDecoder(&bufOut)
 
 	//create post
-	postIn := &Post{Id: i, Content: "Content:" + strconv.Itoa(i)}
+	postIn := &post{Id: i, Content: "Content:" + strconv.Itoa(i)}
 	key := make([]byte, 4)
 	binary.BigEndian.PutUint32(key, uint32(i))
 
@@ -113,7 +113,7 @@ func gobExample() {
 	}
 
 	//decode post
-	postOut := &Post{}
+	postOut := &post{}
 	if bin, err := slowpoke.Get(file, key); err == nil {
 		bufOut.Write(bin)
 		if err := dec.Decode(&postOut); err == nil {

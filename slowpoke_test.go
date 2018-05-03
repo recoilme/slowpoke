@@ -462,7 +462,7 @@ func TestKeys(t *testing.T) {
 		s += string(r)
 	}
 	if s != "1011" {
-		t.Error("resprefasc", s)
+		t.Error("resprefasc", s, err)
 	}
 
 	//by prefixasc2
