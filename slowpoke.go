@@ -681,7 +681,7 @@ func SetGob(file string, key interface{}, val interface{}) (err error) {
 		return err
 	}
 
-	err = db.setKey(string(bufKey.Bytes()), bufVal.Bytes())
+	err = db.setKey(bufKey.String(), bufVal.Bytes())
 	return err
 }
 
@@ -734,7 +734,7 @@ func GetGob(file string, key interface{}, val interface{}) (err error) {
 		return err
 	}
 
-	bin, err := db.readKey(string(buf.Bytes()))
+	bin, err := db.readKey(buf.String())
 	buf.Reset()
 	if err != nil {
 		return err
