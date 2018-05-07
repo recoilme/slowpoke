@@ -102,6 +102,23 @@ type getsRequest struct {
 	responseChan chan getsResponse
 }
 
+type hasResponse struct {
+	exists bool
+}
+
+type hasRequest struct {
+	key          string
+	responseChan chan hasResponse
+}
+
+type countResponse struct {
+	count int
+}
+
+type countRequest struct {
+	responseChan chan countResponse
+}
+
 // Db store channels with requests
 type Db struct {
 	readRequests   chan readRequest
@@ -110,6 +127,8 @@ type Db struct {
 	keysRequests   chan keysRequest
 	setsRequests   chan setsRequest
 	getsRequests   chan getsRequest
+	hasRequests    chan hasRequest
+	countRequests  chan countRequest
 }
 
 // newDb Create new Db
@@ -124,6 +143,8 @@ func newDb(file string) (*Db, error) {
 	keysRequests := make(chan keysRequest)
 	setsRequests := make(chan setsRequest)
 	getsRequests := make(chan getsRequest)
+	hasRequests := make(chan hasRequest)
+	countRequests := make(chan countRequest)
 	d := &Db{
 		readRequests:   readRequests,
 		writeRequests:  writeRequests,
@@ -131,6 +152,8 @@ func newDb(file string) (*Db, error) {
 		keysRequests:   keysRequests,
 		setsRequests:   setsRequests,
 		getsRequests:   getsRequests,
+		hasRequests:    hasRequests,
+		countRequests:  countRequests,
 	}
 	// This is a lambda, so we don't have to add members to the struct
 	runtime.SetFinalizer(d, func(dict *Db) {
@@ -155,7 +178,7 @@ func newDb(file string) (*Db, error) {
 	}
 
 	// We can't have run be a method of Db, because otherwise then the goroutine will keep the reference alive
-	go run(ctx, fk, fv, readRequests, writeRequests, deleteRequests, keysRequests, setsRequests, getsRequests)
+	go run(ctx, fk, fv, readRequests, writeRequests, deleteRequests, keysRequests, setsRequests, getsRequests, hasRequests, countRequests)
 
 	return d, nil
 }
@@ -180,7 +203,8 @@ func checkAndCreate(path string) (bool, error) {
 func run(parentCtx context.Context, fk *os.File, fv *os.File,
 	readRequests <-chan readRequest, writeRequests <-chan writeRequest,
 	deleteRequests <-chan deleteRequest, keysRequests <-chan keysRequest,
-	setsRequests <-chan setsRequest, getsRequests <-chan getsRequest) error {
+	setsRequests <-chan setsRequest, getsRequests <-chan getsRequest,
+	hasRequests <-chan hasRequest, countRequests <-chan countRequest) error {
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 	// valDict map with key and address of values
@@ -198,9 +222,8 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 		found := sort.Search(len(keysDict), func(i int) bool {
 			return bytes.Compare(keysDict[i], b) >= 0
 		})
-		if found >= 0 && found < len(keysDict) {
+		if found < len(keysDict) {
 			//fmt.Printf("found:%d key:%+v keys:%+v\n", found, b, keysDict)
-			//is found return 0 if not found?
 			if bytes.Equal(keysDict[found], b) {
 				keysDict = append(keysDict[:found], keysDict[found+1:]...)
 			}
@@ -347,18 +370,6 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 			}
 
 		case kr := <-keysRequests:
-
-			//sort slice
-			//TODO may be store sort state in bool
-			/*
-				sorted := sort.SliceIsSorted(keysDict, func(i, j int) bool {
-					return bytes.Compare(keysDict[i], keysDict[j]) <= 0
-				})
-				if !sorted {
-					sort.Slice(keysDict, func(i, j int) bool {
-						return bytes.Compare(keysDict[i], keysDict[j]) <= 0
-					})
-				}*/
 			var result [][]byte
 			result = make([][]byte, 0)
 			lenKeys := len(keysDict)
@@ -539,6 +550,11 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 				}
 			}
 			gr.responseChan <- getsResponse{result}
+		case hr := <-hasRequests:
+			_, exists := valDict[hr.key]
+			hr.responseChan <- hasResponse{exists: exists}
+		case cr := <-countRequests:
+			cr.responseChan <- countResponse{len(keysDict)}
 		}
 	}
 }
@@ -648,6 +664,24 @@ func (dict *Db) gets(keys [][]byte) [][]byte {
 	return resp.pairs
 }
 
+// internal has
+func (dict *Db) has(key string) bool {
+	c := make(chan hasResponse)
+	w := hasRequest{key: key, responseChan: c}
+	dict.hasRequests <- w
+	resp := <-c
+	return resp.exists
+}
+
+// internal count
+func (dict *Db) countKeys() int {
+	c := make(chan countResponse)
+	w := countRequest{responseChan: c}
+	dict.countRequests <- w
+	resp := <-c
+	return resp.count
+}
+
 // Set store val and key with sync at end
 // File - may be existing file or new
 // If path to file contains dirs - dirs will be created
@@ -660,6 +694,11 @@ func Set(file string, key []byte, val []byte) (err error) {
 	}
 	err = db.setKey(string(key), val)
 	return err
+}
+
+// Put store val and key with sync at end. It's wrapper for Set.
+func Put(file string, key []byte, val []byte) (err error) {
+	return Set(file, key, val)
 }
 
 // SetGob - experimental future for lazy usage, see tests
@@ -683,6 +722,27 @@ func SetGob(file string, key interface{}, val interface{}) (err error) {
 
 	err = db.setKey(bufKey.String(), bufVal.Bytes())
 	return err
+}
+
+// Has return true if key exist or error if any
+func Has(file string, key []byte) (exist bool, err error) {
+	db, err := Open(file)
+	//fmt.Println("set", db, err)
+	if err != nil {
+		return false, err
+	}
+	exist = db.has(string(key))
+	return exist, err
+}
+
+// Count return count of keys or error if any
+func Count(file string) (cnt int, err error) {
+	db, err := Open(file)
+	if err != nil {
+		return 0, err
+	}
+	cnt = db.countKeys()
+	return cnt, err
 }
 
 // Open open/create Db (with dirs)

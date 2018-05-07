@@ -667,3 +667,48 @@ func TestSortedInsert(t *testing.T) {
 		}
 	}
 }
+
+func TestPut(t *testing.T) {
+	f := "test/TestPut.db"
+	DeleteFile(f)
+	key := []byte("1")
+	err := Put(f, key, key)
+	ch(err, t)
+	b, err := Get(f, key)
+	if !bytes.Equal(b, key) {
+		t.Error("not equal")
+	}
+	Close(f)
+	DeleteFile(f)
+}
+
+func TestHasCount(t *testing.T) {
+	f := "test/TestHas.db"
+	DeleteFile(f)
+	key := []byte("1")
+	notexist, err := Has(f, key)
+	if notexist == true {
+		t.Error("Has return exist", err)
+	}
+
+	zero, _ := Count(f)
+	if zero != 0 {
+		t.Error("Not zero")
+	}
+	Put(f, key, key)
+	one, _ := Count(f)
+	if one != 1 {
+		t.Error("Not one")
+	}
+	exist, err := Has(f, key)
+	if exist == false {
+		t.Error("Has return not exist", err)
+	}
+	Delete(f, key)
+	Close(f)
+	noone, _ := Count(f)
+	if noone != 0 {
+		t.Error("Not one", noone)
+	}
+	DeleteFile(f)
+}
