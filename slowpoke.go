@@ -128,17 +128,25 @@ type counterRequest struct {
 	responseChan chan counterResponse
 }
 
+type counterSetRequest struct {
+	key          string
+	counter      uint64
+	store        bool
+	responseChan chan struct{}
+}
+
 // Db store channels with requests
 type Db struct {
-	readRequests    chan readRequest
-	writeRequests   chan writeRequest
-	deleteRequests  chan deleteRequest
-	keysRequests    chan keysRequest
-	setsRequests    chan setsRequest
-	getsRequests    chan getsRequest
-	hasRequests     chan hasRequest
-	countRequests   chan countRequest
-	counterRequests chan counterRequest
+	readRequests       chan readRequest
+	writeRequests      chan writeRequest
+	deleteRequests     chan deleteRequest
+	keysRequests       chan keysRequest
+	setsRequests       chan setsRequest
+	getsRequests       chan getsRequest
+	hasRequests        chan hasRequest
+	countRequests      chan countRequest
+	counterRequests    chan counterRequest
+	counterSetRequests chan counterSetRequest
 }
 
 // newDb Create new Db
@@ -156,16 +164,18 @@ func newDb(file string) (*Db, error) {
 	hasRequests := make(chan hasRequest)
 	countRequests := make(chan countRequest)
 	counterRequests := make(chan counterRequest)
+	counterSetRequests := make(chan counterSetRequest)
 	d := &Db{
-		readRequests:    readRequests,
-		writeRequests:   writeRequests,
-		deleteRequests:  deleteRequests,
-		keysRequests:    keysRequests,
-		setsRequests:    setsRequests,
-		getsRequests:    getsRequests,
-		hasRequests:     hasRequests,
-		countRequests:   countRequests,
-		counterRequests: counterRequests,
+		readRequests:       readRequests,
+		writeRequests:      writeRequests,
+		deleteRequests:     deleteRequests,
+		keysRequests:       keysRequests,
+		setsRequests:       setsRequests,
+		getsRequests:       getsRequests,
+		hasRequests:        hasRequests,
+		countRequests:      countRequests,
+		counterRequests:    counterRequests,
+		counterSetRequests: counterSetRequests,
 	}
 	// This is a lambda, so we don't have to add members to the struct
 	runtime.SetFinalizer(d, func(dict *Db) {
@@ -191,7 +201,7 @@ func newDb(file string) (*Db, error) {
 
 	// We can't have run be a method of Db, because otherwise then the goroutine will keep the reference alive
 	go run(ctx, fk, fv, readRequests, writeRequests, deleteRequests, keysRequests, setsRequests, getsRequests,
-		hasRequests, countRequests, counterRequests)
+		hasRequests, countRequests, counterRequests, counterSetRequests)
 
 	return d, nil
 }
@@ -218,7 +228,7 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 	deleteRequests <-chan deleteRequest, keysRequests <-chan keysRequest,
 	setsRequests <-chan setsRequest, getsRequests <-chan getsRequest,
 	hasRequests <-chan hasRequest, countRequests <-chan countRequest,
-	counterRequests <-chan counterRequest) error {
+	counterRequests <-chan counterRequest, counterSetRequests <-chan counterSetRequest) error {
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 	// valDict map with key and address of values
@@ -311,7 +321,6 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 		select {
 		case <-ctx.Done():
 			// start on Close()
-
 			fk.Close()
 			fv.Close()
 			//fmt.Println("done")
@@ -538,10 +547,29 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 		case cntrr := <-counterRequests:
 			val, _ := countersDict[cntrr.key]
 			val++
-			// if counter == 1 - first call of counter
 			countersDict[cntrr.key] = val
 			cntrr.responseChan <- counterResponse{counter: val}
+		case cntrSetr := <-counterSetRequests:
+			if cntrSetr.store {
+				for k, v := range countersDict {
+					//store current counter
+					//fmt.Printf("%+v:%+v\n", k, v)
+					oldCmd, exists := valDict[k]
+					if v > 0 {
+
+						buf := make([]byte, 8)
+						binary.BigEndian.PutUint64(buf, v)
+
+						writeKeyVal(fk, fv, k, buf, exists, oldCmd)
+					}
+				}
+			} else {
+				countersDict[cntrSetr.key] = cntrSetr.counter
+			}
+
+			close(cntrSetr.responseChan)
 		}
+
 	}
 }
 
@@ -598,6 +626,7 @@ func writeKey(fk *os.File, t uint8, seek, size uint32, key []byte, sync bool, ke
 }
 
 func writeKeyVal(fk *os.File, fv *os.File, readKey string, writeVal []byte, exists bool, oldCmd *Cmd) (cmd *Cmd, err error) {
+
 	var seek, newSeek int64
 	cmd = &Cmd{Size: uint32(len(writeVal))}
 	if exists {
@@ -622,7 +651,6 @@ func writeKeyVal(fk *os.File, fv *os.File, readKey string, writeVal []byte, exis
 		// write value at the end of file
 		seek, _, err = writeAtPos(fv, writeVal, int64(-1), true)
 		cmd.Seek = uint32(seek)
-
 		if err == nil {
 			newSeek, err = writeKey(fk, 0, cmd.Seek, cmd.Size, []byte(readKey), true, -1)
 			cmd.KeySeek = uint32(newSeek)
@@ -711,6 +739,14 @@ func (dict *Db) counterGet(key string) uint64 {
 	return resp.counter
 }
 
+// internal counter
+func (dict *Db) counterSet(key string, counterNewVal uint64, store bool) {
+	c := make(chan struct{})
+	w := counterSetRequest{key: key, counter: counterNewVal, store: store, responseChan: c}
+	dict.counterSetRequests <- w
+	<-c
+}
+
 // Set store val and key with sync at end
 // File - may be existing file or new
 // If path to file contains dirs - dirs will be created
@@ -780,18 +816,19 @@ func Counter(file string, key []byte) (counter uint64, err error) {
 	if err != nil {
 		return 0, err
 	}
-	//counter = db.counterGet(string(key))
-	b, _ := db.readKey(string(key))
-	//fmt.Println("counter", b, err)
-	if b != nil {
-		//recover in case of panic?
-		counter = binary.BigEndian.Uint64(b)
-	}
+	counter = db.counterGet(string(key))
+	//fmt.Println("Counter", counter)
+	if counter == 1 {
+		// new counter
+		b, _ := db.readKey(string(key))
+		if b != nil && len(b) == 8 {
+			//recover in case of panic?
+			counter = binary.BigEndian.Uint64(b)
+			counter++
+		}
 
-	counter++
-	buf := make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, counter)
-	db.setKey(string(key), buf)
+		db.counterSet(string(key), counter, false)
+	}
 	return counter, err
 }
 
@@ -875,9 +912,11 @@ func Keys(file string, from []byte, limit, offset uint32, asc bool) ([][]byte, e
 func Close(file string) (err error) {
 	mutex.Lock()
 	defer mutex.Unlock()
-	_, ok := stores[file]
+	db, ok := stores[file]
 	if !ok {
 		return ErrDbNotOpen
+	} else {
+		db.counterSet("", 0, true)
 	}
 	delete(stores, file)
 	/* Force GC, to require finalizer to run */

@@ -715,11 +715,33 @@ func TestHasCount(t *testing.T) {
 
 func TestCounter(t *testing.T) {
 	f := "test/TestCnt.db"
-	//DeleteFile(f)
+	var counter uint64
+	var err error
+	DeleteFile(f)
 	key := []byte("postcounter")
 	for i := 0; i < 10; i++ {
-		counter, err := Counter(f, key)
-		fmt.Println(counter, err)
+		counter, err = Counter(f, key)
+		ch(err, t)
 	}
-
+	Close(f)
+	for i := 0; i < 10; i++ {
+		counter, err = Counter(f, key)
+		ch(err, t)
+	}
+	if counter != 20 {
+		t.Error("counter!=20")
+	}
+	key2 := []byte("counter2")
+	for i := 0; i < 5; i++ {
+		counter, err = Counter(f, key2)
+		ch(err, t)
+	}
+	Close(f)
+	for i := 0; i < 5; i++ {
+		counter, err = Counter(f, key2)
+		ch(err, t)
+	}
+	if counter != 10 {
+		t.Error("counter!=10")
+	}
 }
