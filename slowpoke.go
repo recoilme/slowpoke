@@ -915,9 +915,9 @@ func Close(file string) (err error) {
 	db, ok := stores[file]
 	if !ok {
 		return ErrDbNotOpen
-	} else {
-		db.counterSet("", 0, true)
 	}
+	// store counters if present
+	db.counterSet("", 0, true)
 	delete(stores, file)
 	/* Force GC, to require finalizer to run */
 	runtime.GC()
