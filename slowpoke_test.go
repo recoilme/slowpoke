@@ -712,3 +712,14 @@ func TestHasCount(t *testing.T) {
 	}
 	DeleteFile(f)
 }
+
+func TestCounter(t *testing.T) {
+	f := "test/TestCnt.db"
+	//DeleteFile(f)
+	key := []byte("postcounter")
+	for i := 0; i < 10; i++ {
+		counter, err := Counter(f, key)
+		fmt.Println(counter, err)
+	}
+
+}
