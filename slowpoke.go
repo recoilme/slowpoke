@@ -111,24 +111,33 @@ type hasRequest struct {
 	responseChan chan hasResponse
 }
 
-type countResponse struct {
-	count int
+type counterGetResponse struct {
+	counter uint64
 }
 
-type countRequest struct {
-	responseChan chan countResponse
+type counterGetRequest struct {
+	key          string
+	responseChan chan counterGetResponse
+}
+
+type counterSetRequest struct {
+	key          string
+	counter      uint64
+	store        bool
+	responseChan chan struct{}
 }
 
 // Db store channels with requests
 type Db struct {
-	readRequests   chan readRequest
-	writeRequests  chan writeRequest
-	deleteRequests chan deleteRequest
-	keysRequests   chan keysRequest
-	setsRequests   chan setsRequest
-	getsRequests   chan getsRequest
-	hasRequests    chan hasRequest
-	countRequests  chan countRequest
+	readRequests       chan readRequest
+	writeRequests      chan writeRequest
+	deleteRequests     chan deleteRequest
+	keysRequests       chan keysRequest
+	setsRequests       chan setsRequest
+	getsRequests       chan getsRequest
+	hasRequests        chan hasRequest
+	counterGetRequests chan counterGetRequest
+	counterSetRequests chan counterSetRequest
 }
 
 // newDb Create new Db
@@ -144,16 +153,18 @@ func newDb(file string) (*Db, error) {
 	setsRequests := make(chan setsRequest)
 	getsRequests := make(chan getsRequest)
 	hasRequests := make(chan hasRequest)
-	countRequests := make(chan countRequest)
+	counterGetRequests := make(chan counterGetRequest)
+	counterSetRequests := make(chan counterSetRequest)
 	d := &Db{
-		readRequests:   readRequests,
-		writeRequests:  writeRequests,
-		deleteRequests: deleteRequests,
-		keysRequests:   keysRequests,
-		setsRequests:   setsRequests,
-		getsRequests:   getsRequests,
-		hasRequests:    hasRequests,
-		countRequests:  countRequests,
+		readRequests:       readRequests,
+		writeRequests:      writeRequests,
+		deleteRequests:     deleteRequests,
+		keysRequests:       keysRequests,
+		setsRequests:       setsRequests,
+		getsRequests:       getsRequests,
+		hasRequests:        hasRequests,
+		counterGetRequests: counterGetRequests,
+		counterSetRequests: counterSetRequests,
 	}
 	// This is a lambda, so we don't have to add members to the struct
 	runtime.SetFinalizer(d, func(dict *Db) {
@@ -178,7 +189,8 @@ func newDb(file string) (*Db, error) {
 	}
 
 	// We can't have run be a method of Db, because otherwise then the goroutine will keep the reference alive
-	go run(ctx, fk, fv, readRequests, writeRequests, deleteRequests, keysRequests, setsRequests, getsRequests, hasRequests, countRequests)
+	go run(ctx, fk, fv, readRequests, writeRequests, deleteRequests, keysRequests, setsRequests, getsRequests,
+		hasRequests, counterGetRequests, counterSetRequests)
 
 	return d, nil
 }
@@ -204,21 +216,19 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 	readRequests <-chan readRequest, writeRequests <-chan writeRequest,
 	deleteRequests <-chan deleteRequest, keysRequests <-chan keysRequest,
 	setsRequests <-chan setsRequest, getsRequests <-chan getsRequest,
-	hasRequests <-chan hasRequest, countRequests <-chan countRequest) error {
+	hasRequests <-chan hasRequest,
+	counterGetRequests <-chan counterGetRequest, counterSetRequests <-chan counterSetRequest) error {
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 	// valDict map with key and address of values
 	valDict := make(map[string]*Cmd)
 	// keysDict store ordered slice of keys
 	var keysDict = make([][]byte, 0)
+	// countersDict store counters
+	countersDict := make(map[string]uint64)
 
 	//delete key from slice keysDict
 	deleteFromKeys := func(b []byte) {
-		//fmt.Printf("before sort keys:%+v\n", keysDict)
-		//sort.Slice(keysDict, func(i, j int) bool {
-		//return bytes.Compare(keysDict[i], keysDict[j]) <= 0
-		//})
-		//fmt.Printf("after sort keys:%+v\n", keysDict)
 		found := sort.Search(len(keysDict), func(i int) bool {
 			return bytes.Compare(keysDict[i], b) >= 0
 		})
@@ -315,48 +325,16 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 			writeKey(fk, 1, 0, 0, []byte(dr.deleteKey), true, -1)
 			close(dr.responseChan)
 		case wr := <-writeRequests:
-			var err error
-			var seek, newSeek int64
-			cmd := &Cmd{Size: uint32(len(wr.writeVal))}
-			if val, exists := valDict[wr.readKey]; exists {
-				// key exists
-				cmd.Seek = val.Seek
-				cmd.KeySeek = val.KeySeek
-				if val.Size >= uint32(len(wr.writeVal)) {
-					//write at old seek new value
-					_, _, err = writeAtPos(fv, wr.writeVal, int64(val.Seek), true) //fv.WriteAt(wr.writeVal, int64(val.Seek))
-				} else {
-					//write at new seek (at the end of file)
-					seek, _, err = writeAtPos(fv, wr.writeVal, int64(-1), true) //fv.Write(wr.writeVal)
-					cmd.Seek = uint32(seek)
-				}
-				if err == nil {
-					// if no error - store key at KeySeek
-					newSeek, err = writeKey(fk, 0, cmd.Seek, cmd.Size, []byte(wr.readKey), true, int64(cmd.KeySeek))
-					cmd.KeySeek = uint32(newSeek)
-				}
-			} else {
-				// new key
-				// write value at the end of file
-				seek, _, err = writeAtPos(fv, wr.writeVal, int64(-1), true) //fv.Write(wr.writeVal)
-				cmd.Seek = uint32(seek)
-				//fmt.Println(fv, wr.readKey, string(wr.writeVal), cmd.Seek, err)
-
-				//write new key at keys store
-				//keysDict = append(keysDict, []byte(wr.readKey))
+			oldCmd, exists := valDict[wr.readKey]
+			cmd, err := writeKeyVal(fk, fv, wr.readKey, wr.writeVal, exists, oldCmd)
+			if !exists {
 				appendAsc([]byte(wr.readKey))
-				if err == nil {
-					newSeek, err = writeKey(fk, 0, cmd.Seek, cmd.Size, []byte(wr.readKey), true, -1)
-					cmd.KeySeek = uint32(newSeek)
-				}
 			}
-
 			if err == nil {
 				//fmt.Printf("wr:%s %+v\n", wr.readKey, cmd)
-				// store value address
+				// store command if no error
 				valDict[wr.readKey] = cmd
 			}
-
 			wr.responseChan <- writeResponse{err}
 		case rr := <-readRequests:
 			if val, exists := valDict[rr.readKey]; exists {
@@ -553,9 +531,39 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 		case hr := <-hasRequests:
 			_, exists := valDict[hr.key]
 			hr.responseChan <- hasResponse{exists: exists}
-		case cr := <-countRequests:
-			cr.responseChan <- countResponse{len(keysDict)}
+		case cgr := <-counterGetRequests:
+			var val uint64
+			switch cgr.key {
+			case "_LEN_KEYS_":
+				val = uint64(len(keysDict))
+			default:
+				val, _ = countersDict[cgr.key]
+				val++
+				countersDict[cgr.key] = val
+			}
+
+			cgr.responseChan <- counterGetResponse{counter: val}
+		case csr := <-counterSetRequests:
+			if csr.store {
+				for k, v := range countersDict {
+					//store current counter
+					//fmt.Printf("%+v:%+v\n", k, v)
+					oldCmd, exists := valDict[k]
+					if v > 0 {
+
+						buf := make([]byte, 8)
+						binary.BigEndian.PutUint64(buf, v)
+
+						writeKeyVal(fk, fv, k, buf, exists, oldCmd)
+					}
+				}
+			} else {
+				countersDict[csr.key] = csr.counter
+			}
+
+			close(csr.responseChan)
 		}
+
 	}
 }
 
@@ -589,13 +597,13 @@ func writeKey(fk *os.File, t uint8, seek, size uint32, key []byte, sync bool, ke
 	buf.Grow(16 + len(key))
 
 	//encode
-	binary.Write(buf, binary.BigEndian, uint8(0))                  //1byte
-	binary.Write(buf, binary.BigEndian, t)                         //1byte
-	binary.Write(buf, binary.BigEndian, seek)                      //4byte
-	binary.Write(buf, binary.BigEndian, size)                      //4byte
-	binary.Write(buf, binary.BigEndian, uint32(time.Now().Unix())) //4byte
-	binary.Write(buf, binary.BigEndian, uint16(len(key)))          //2byte
-	buf.Write(key)
+	binary.Write(buf, binary.BigEndian, uint8(0))                  //1byte version
+	binary.Write(buf, binary.BigEndian, t)                         //1byte command code(0-set,1-delete)
+	binary.Write(buf, binary.BigEndian, seek)                      //4byte seek
+	binary.Write(buf, binary.BigEndian, size)                      //4byte size
+	binary.Write(buf, binary.BigEndian, uint32(time.Now().Unix())) //4byte timestamp
+	binary.Write(buf, binary.BigEndian, uint16(len(key)))          //2byte key size
+	buf.Write(key)                                                 //key
 
 	if sync {
 		if keySeek < 0 {
@@ -609,6 +617,40 @@ func writeKey(fk *os.File, t uint8, seek, size uint32, key []byte, sync bool, ke
 	}
 
 	return newSeek, err
+}
+
+func writeKeyVal(fk *os.File, fv *os.File, readKey string, writeVal []byte, exists bool, oldCmd *Cmd) (cmd *Cmd, err error) {
+
+	var seek, newSeek int64
+	cmd = &Cmd{Size: uint32(len(writeVal))}
+	if exists {
+		// key exists
+		cmd.Seek = oldCmd.Seek
+		cmd.KeySeek = oldCmd.KeySeek
+		if oldCmd.Size >= uint32(len(writeVal)) {
+			//write at old seek new value
+			_, _, err = writeAtPos(fv, writeVal, int64(oldCmd.Seek), true)
+		} else {
+			//write at new seek (at the end of file)
+			seek, _, err = writeAtPos(fv, writeVal, int64(-1), true)
+			cmd.Seek = uint32(seek)
+		}
+		if err == nil {
+			// if no error - store key at KeySeek
+			newSeek, err = writeKey(fk, 0, cmd.Seek, cmd.Size, []byte(readKey), true, int64(cmd.KeySeek))
+			cmd.KeySeek = uint32(newSeek)
+		}
+	} else {
+		// new key
+		// write value at the end of file
+		seek, _, err = writeAtPos(fv, writeVal, int64(-1), true)
+		cmd.Seek = uint32(seek)
+		if err == nil {
+			newSeek, err = writeKey(fk, 0, cmd.Seek, cmd.Size, []byte(readKey), true, -1)
+			cmd.KeySeek = uint32(newSeek)
+		}
+	}
+	return cmd, err
 }
 
 // internal set
@@ -673,13 +715,21 @@ func (dict *Db) has(key string) bool {
 	return resp.exists
 }
 
-// internal count
-func (dict *Db) countKeys() int {
-	c := make(chan countResponse)
-	w := countRequest{responseChan: c}
-	dict.countRequests <- w
+// internal counter
+func (dict *Db) counterGet(key string) uint64 {
+	c := make(chan counterGetResponse)
+	w := counterGetRequest{key: key, responseChan: c}
+	dict.counterGetRequests <- w
 	resp := <-c
-	return resp.count
+	return resp.counter
+}
+
+// internal counter
+func (dict *Db) counterSet(key string, counterNewVal uint64, store bool) {
+	c := make(chan struct{})
+	w := counterSetRequest{key: key, counter: counterNewVal, store: store, responseChan: c}
+	dict.counterSetRequests <- w
+	<-c
 }
 
 // Set store val and key with sync at end
@@ -736,13 +786,35 @@ func Has(file string, key []byte) (exist bool, err error) {
 }
 
 // Count return count of keys or error if any
-func Count(file string) (cnt int, err error) {
+func Count(file string) (cnt uint64, err error) {
 	db, err := Open(file)
 	if err != nil {
 		return 0, err
 	}
-	cnt = db.countKeys()
+	cnt = db.counterGet("_LEN_KEYS_") //db.countKeys()
 	return cnt, err
+}
+
+// Counter return unique uint64
+func Counter(file string, key []byte) (counter uint64, err error) {
+	db, err := Open(file)
+	if err != nil {
+		return 0, err
+	}
+	counter = db.counterGet(string(key))
+	//fmt.Println("Counter", counter)
+	if counter == 1 {
+		// new counter
+		b, _ := db.readKey(string(key))
+		if b != nil && len(b) == 8 {
+			//recover in case of panic?
+			counter = binary.BigEndian.Uint64(b)
+			counter++
+		}
+
+		db.counterSet(string(key), counter, false)
+	}
+	return counter, err
 }
 
 // Open open/create Db (with dirs)
@@ -825,10 +897,12 @@ func Keys(file string, from []byte, limit, offset uint32, asc bool) ([][]byte, e
 func Close(file string) (err error) {
 	mutex.Lock()
 	defer mutex.Unlock()
-	_, ok := stores[file]
+	db, ok := stores[file]
 	if !ok {
 		return ErrDbNotOpen
 	}
+	// store counters if present
+	db.counterSet("", 0, true)
 	delete(stores, file)
 	/* Force GC, to require finalizer to run */
 	runtime.GC()
