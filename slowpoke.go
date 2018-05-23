@@ -111,21 +111,13 @@ type hasRequest struct {
 	responseChan chan hasResponse
 }
 
-type countResponse struct {
-	count int
-}
-
-type countRequest struct {
-	responseChan chan countResponse
-}
-
-type counterResponse struct {
+type counterGetResponse struct {
 	counter uint64
 }
 
-type counterRequest struct {
+type counterGetRequest struct {
 	key          string
-	responseChan chan counterResponse
+	responseChan chan counterGetResponse
 }
 
 type counterSetRequest struct {
@@ -144,8 +136,7 @@ type Db struct {
 	setsRequests       chan setsRequest
 	getsRequests       chan getsRequest
 	hasRequests        chan hasRequest
-	countRequests      chan countRequest
-	counterRequests    chan counterRequest
+	counterGetRequests chan counterGetRequest
 	counterSetRequests chan counterSetRequest
 }
 
@@ -162,8 +153,7 @@ func newDb(file string) (*Db, error) {
 	setsRequests := make(chan setsRequest)
 	getsRequests := make(chan getsRequest)
 	hasRequests := make(chan hasRequest)
-	countRequests := make(chan countRequest)
-	counterRequests := make(chan counterRequest)
+	counterGetRequests := make(chan counterGetRequest)
 	counterSetRequests := make(chan counterSetRequest)
 	d := &Db{
 		readRequests:       readRequests,
@@ -173,8 +163,7 @@ func newDb(file string) (*Db, error) {
 		setsRequests:       setsRequests,
 		getsRequests:       getsRequests,
 		hasRequests:        hasRequests,
-		countRequests:      countRequests,
-		counterRequests:    counterRequests,
+		counterGetRequests: counterGetRequests,
 		counterSetRequests: counterSetRequests,
 	}
 	// This is a lambda, so we don't have to add members to the struct
@@ -201,7 +190,7 @@ func newDb(file string) (*Db, error) {
 
 	// We can't have run be a method of Db, because otherwise then the goroutine will keep the reference alive
 	go run(ctx, fk, fv, readRequests, writeRequests, deleteRequests, keysRequests, setsRequests, getsRequests,
-		hasRequests, countRequests, counterRequests, counterSetRequests)
+		hasRequests, counterGetRequests, counterSetRequests)
 
 	return d, nil
 }
@@ -227,8 +216,8 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 	readRequests <-chan readRequest, writeRequests <-chan writeRequest,
 	deleteRequests <-chan deleteRequest, keysRequests <-chan keysRequest,
 	setsRequests <-chan setsRequest, getsRequests <-chan getsRequest,
-	hasRequests <-chan hasRequest, countRequests <-chan countRequest,
-	counterRequests <-chan counterRequest, counterSetRequests <-chan counterSetRequest) error {
+	hasRequests <-chan hasRequest,
+	counterGetRequests <-chan counterGetRequest, counterSetRequests <-chan counterSetRequest) error {
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 	// valDict map with key and address of values
@@ -542,15 +531,20 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 		case hr := <-hasRequests:
 			_, exists := valDict[hr.key]
 			hr.responseChan <- hasResponse{exists: exists}
-		case cr := <-countRequests:
-			cr.responseChan <- countResponse{len(keysDict)}
-		case cntrr := <-counterRequests:
-			val, _ := countersDict[cntrr.key]
-			val++
-			countersDict[cntrr.key] = val
-			cntrr.responseChan <- counterResponse{counter: val}
-		case cntrSetr := <-counterSetRequests:
-			if cntrSetr.store {
+		case cgr := <-counterGetRequests:
+			var val uint64
+			switch cgr.key {
+			case "_LEN_KEYS_":
+				val = uint64(len(keysDict))
+			default:
+				val, _ = countersDict[cgr.key]
+				val++
+				countersDict[cgr.key] = val
+			}
+
+			cgr.responseChan <- counterGetResponse{counter: val}
+		case csr := <-counterSetRequests:
+			if csr.store {
 				for k, v := range countersDict {
 					//store current counter
 					//fmt.Printf("%+v:%+v\n", k, v)
@@ -564,10 +558,10 @@ func run(parentCtx context.Context, fk *os.File, fv *os.File,
 					}
 				}
 			} else {
-				countersDict[cntrSetr.key] = cntrSetr.counter
+				countersDict[csr.key] = csr.counter
 			}
 
-			close(cntrSetr.responseChan)
+			close(csr.responseChan)
 		}
 
 	}
@@ -721,20 +715,11 @@ func (dict *Db) has(key string) bool {
 	return resp.exists
 }
 
-// internal count
-func (dict *Db) countKeys() int {
-	c := make(chan countResponse)
-	w := countRequest{responseChan: c}
-	dict.countRequests <- w
-	resp := <-c
-	return resp.count
-}
-
 // internal counter
 func (dict *Db) counterGet(key string) uint64 {
-	c := make(chan counterResponse)
-	w := counterRequest{key: key, responseChan: c}
-	dict.counterRequests <- w
+	c := make(chan counterGetResponse)
+	w := counterGetRequest{key: key, responseChan: c}
+	dict.counterGetRequests <- w
 	resp := <-c
 	return resp.counter
 }
@@ -801,12 +786,12 @@ func Has(file string, key []byte) (exist bool, err error) {
 }
 
 // Count return count of keys or error if any
-func Count(file string) (cnt int, err error) {
+func Count(file string) (cnt uint64, err error) {
 	db, err := Open(file)
 	if err != nil {
 		return 0, err
 	}
-	cnt = db.countKeys()
+	cnt = db.counterGet("_LEN_KEYS_") //db.countKeys()
 	return cnt, err
 }
 
