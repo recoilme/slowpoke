@@ -20,9 +20,15 @@ Keys are stored in memory with persistence to disk. Values stored on disk only.
 
 **Server**
 
-A simple http server can be found here: https://github.com/recoilme/slowpoke/tree/master/simpleserver
 
-gRPC Server (in development): https://github.com/recoilme/okdb
+GRPC Server example: https://github.com/recoilme/okdb
+
+**Complex example**
+
+[golang-gin-realworld-example-app](https://github.com/recoilme/golang-gin-realworld-example-app)
+
+This codebase was created to demonstrate a fully fledged fullstack application built with Golang/Gin/Slowpoke including CRUD operations, authentication, routing, pagination, and more.
+
 
 **Basic example**
 

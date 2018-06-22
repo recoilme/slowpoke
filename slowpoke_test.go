@@ -521,6 +521,42 @@ func TestWriteRead(t *testing.T) {
 
 }
 
+func TestBinGob(t *testing.T) {
+	file := "test/gob.db"
+	DeleteFile(file)
+	defer CloseAll()
+
+	type Post struct {
+		Id       uint32
+		Content  string
+		Category string
+	}
+	for i := 1; i < 2; i++ {
+		post := &Post{Id: uint32(i), Content: "Content:" + strconv.Itoa(i)}
+		err := SetGob(file, post.Id, post)
+		ch(err, t)
+
+	}
+
+	SetGob(file, uint32(3), "post3")
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, uint32(3))
+	//fmt.Println(b)
+	SetGob(file, b, "post4")
+	var val string
+	GetGob(file, b, &val)
+	if val != "post4" {
+		t.Error("not post4")
+	}
+
+	bb := make([]byte, 4)
+	binary.BigEndian.PutUint32(bb, uint32(3))
+	GetGob(file, b, &val)
+	if val != "post4" {
+		t.Error("not post4")
+	}
+}
+
 func TestGob(t *testing.T) {
 	file := "test/gob.db"
 	DeleteFile(file)

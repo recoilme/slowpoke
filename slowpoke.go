@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sort"
 	"sync"
@@ -761,7 +762,13 @@ func SetGob(file string, key interface{}, val interface{}) (err error) {
 	bufKey := bytes.Buffer{}
 	bufVal := bytes.Buffer{}
 
-	err = gob.NewEncoder(&bufKey).Encode(key)
+	if reflect.TypeOf(key).String() == "[]uint8" {
+		v := key.([]byte)
+		_, err = bufKey.Write(v)
+	} else {
+		err = gob.NewEncoder(&bufKey).Encode(key)
+	}
+
 	if err != nil {
 		return err
 	}
@@ -771,6 +778,7 @@ func SetGob(file string, key interface{}, val interface{}) (err error) {
 	}
 
 	err = db.setKey(bufKey.String(), bufVal.Bytes())
+	//fmt.Println(bufKey.Bytes())
 	return err
 }
 
@@ -860,8 +868,15 @@ func GetGob(file string, key interface{}, val interface{}) (err error) {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer bufPool.Put(buf)
 	buf.Reset()
+	//fmt.Println(reflect.TypeOf(key))
 
-	err = gob.NewEncoder(buf).Encode(key)
+	if reflect.TypeOf(key).String() == "[]uint8" {
+		v := key.([]byte)
+		_, err = buf.Write(v)
+	} else {
+		err = gob.NewEncoder(buf).Encode(key)
+	}
+
 	if err != nil {
 		return err
 	}
