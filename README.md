@@ -3,24 +3,23 @@
 
 **Description**
 
-Package slowpoke implements a low-level key/value store on Go standard library. Keys are stored in memory (with persistence), values stored on disk.
-
+Package slowpoke is a simple key/value store written using Go's standard library only. Keys are stored in memory (with persistence), values stored on disk.
 
 Description on russian: https://habr.com/post/354224/
-
 
 ![slowpoke](http://tggram.com/media/recoilme/photos/file_488344.jpg)
 
 **Motivation**
 
-Replace bolt.db with more simple and efficient engine: http://recoilmeblog.tggram.com/post/96
+Replace [Bolt](https://github.com/boltdb/bolt) with a simpler and more efficient engine: http://recoilmeblog.tggram.com/post/96
 
 **How it works**
 
-The design is very simple. Keys are stored in memory with persistence on disk. Values stored on disk only.
+Keys are stored in memory with persistence to disk. Values stored on disk only.
 
 
 **Server**
+
 
 GRPC Server example: https://github.com/recoilme/okdb
 
@@ -29,6 +28,7 @@ GRPC Server example: https://github.com/recoilme/okdb
 [golang-gin-realworld-example-app](https://github.com/recoilme/golang-gin-realworld-example-app)
 
 This codebase was created to demonstrate a fully fledged fullstack application built with Golang/Gin/Slowpoke including CRUD operations, authentication, routing, pagination, and more.
+
 
 **Basic example**
 
@@ -149,43 +149,43 @@ func main() {
 
 **Api**
 
-All methods are thread safe.
+All methods are thread-safe.
 
 
 - **Set/Sets/SetGob** 
 
-Store val and key with sync at end. File - may be existing file or new 
+Store val and key with sync at end. If the file does not exist it will be created. 
 
 
 - **Get/Gets/GetGob** 
 
-return value by key or nil and error. Get will open Db if it closed
+Return the value for the given key or nil and an error. `Get` will open the database if necessary.
 
 - **Keys** 
 
-Return keys in ascending/descending order 
+Return keys in ascending/descending order. 
 
-With limit/offset
+With limit and offset.
 
-If from not nil - return keys after from
+If `from` is not nil, return keys lexicographically greater than the `from` value.
 
-If last byte of from == "*" - return keys with this prefix
+If `from` ends with asterix `*`, return keys with the prefix equal to `from` without the asterix.
 
 - **Open/Close** 
 
-Open - open/create file with dirs and read keys
+`Open` - open/create the file possibly creating appropriate directories, and read keys.
 
-Close - close Db and free used memory
+`Close` - close the databse and free used memory.
 
 
 - **CloseAll** 
 
-Close all opened files and remove keys from memory
+Close all files and remove keys from memory
 
 
 - **DeleteFile** 
 
-Delete files from disk (all data will be lost!)
+Delete files from disk and lose all the data.
 
 
 **Used libraries**
