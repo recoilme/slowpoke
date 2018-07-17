@@ -809,20 +809,44 @@ func Counter(file string, key []byte) (counter uint64, err error) {
 	if err != nil {
 		return 0, err
 	}
-	counter = db.counterGet(string(key))
-	//fmt.Println("Counter", counter)
-	if counter == 1 {
-		// new counter
-		b, _ := db.readKey(string(key))
-		if b != nil && len(b) == 8 {
-			//recover in case of panic?
-			counter = binary.BigEndian.Uint64(b)
-			counter++
-		}
 
-		db.counterSet(string(key), counter, false)
+	val, err := db.readKey(string(key))
+	if err == nil {
+		if val == nil || len(val) != 8 {
+			return counter, ErrKeyNotFound
+		}
+		counter = binary.BigEndian.Uint64(val)
+		counter++
+		b := make([]byte, 8)
+		binary.BigEndian.PutUint64(b, counter)
+		err = db.setKey(string(key), b)
+		return counter, err
+	}
+	if err == ErrKeyNotFound {
+		b := make([]byte, 8)
+		binary.BigEndian.PutUint64(b, uint64(1))
+		err = db.setKey(string(key), b)
+		return uint64(1), err
 	}
 	return counter, err
+
+	/*
+			counter = db.counterGet(string(key))
+			//fmt.Println("Counter", counter)
+			if counter == 1 {
+				// new counter
+				b, _ := db.readKey(string(key))
+				if b != nil && len(b) == 8 {
+					//recover in case of panic?
+					counter = binary.BigEndian.Uint64(b)
+					counter++
+				}
+
+				db.counterSet(string(key), counter, false)
+			}
+
+		return counter, err
+	*/
 }
 
 // Open open/create Db (with dirs)
@@ -912,12 +936,13 @@ func Keys(file string, from []byte, limit, offset uint32, asc bool) ([][]byte, e
 func Close(file string) (err error) {
 	mutex.Lock()
 	defer mutex.Unlock()
-	db, ok := stores[file]
+	//db, ok := stores[file]
+	_, ok := stores[file]
 	if !ok {
 		return ErrDbNotOpen
 	}
 	// store counters if present
-	db.counterSet("", 0, true)
+	//db.counterSet("", 0, true)
 	delete(stores, file)
 	/* Force GC, to require finalizer to run */
 	runtime.GC()
