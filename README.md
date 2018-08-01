@@ -21,7 +21,7 @@ Keys are stored in memory with persistence to disk. Values stored on disk only.
 **Server**
 
 
-GRPC Server example: https://github.com/recoilme/okdb
+GRPC Server example: [okdb](https://github.com/recoilme/okdb)
 
 **Complex examples**
 
