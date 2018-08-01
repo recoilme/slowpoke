@@ -23,7 +23,11 @@ Keys are stored in memory with persistence to disk. Values stored on disk only.
 
 GRPC Server example: https://github.com/recoilme/okdb
 
-**Complex example**
+**Complex examples**
+
+[typegram](https://github.com/recoilme/tgram)
+
+zen platform for authors and their subscribers with a minimalistic design and user-friendly interface.
 
 [golang-gin-realworld-example-app](https://github.com/recoilme/golang-gin-realworld-example-app)
 
