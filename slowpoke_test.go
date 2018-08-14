@@ -781,3 +781,50 @@ func TestCounter(t *testing.T) {
 		t.Error("counter!=10")
 	}
 }
+
+func TestAsterix(t *testing.T) {
+	f := "test/TestAsterix.db"
+	DeleteFile(f)
+	k := [...]string{"ka1", "ka2", "ka3", "kb1", "kb2", "k*1", "k*2", "k*3", "kn1", "kn2"}
+	for _, v := range k {
+		Set(f, []byte(v), nil)
+	}
+	k1, _ := Keys(f, []byte("ka"), uint32(0), uint32(0), true)
+	fmt.Println(k1) //[]
+	ka, _ := Keys(f, []byte("ka*"), uint32(0), uint32(0), true)
+	for _, s := range ka {
+		fmt.Println(string(s))
+	}
+	/*
+		ka1
+		ka2
+		ka3
+	*/
+
+	kast, _ := Keys(f, []byte("k**"), uint32(0), uint32(0), true)
+	for _, s := range kast {
+		fmt.Println(string(s))
+	}
+	/*
+		k*1
+		k*2
+		k*3
+	*/
+	fmt.Println("kfrom")
+	kfrom, _ := Keys(f, []byte("k*1"), uint32(0), uint32(0), true)
+	for _, s := range kfrom {
+		fmt.Println(string(s))
+	}
+	/*
+		k*2
+		k*3
+		ka1
+		ka2
+		ka3
+		kb1
+		kb2
+		kn1
+		kn2
+	*/
+	Close(f)
+}
