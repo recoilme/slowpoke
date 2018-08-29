@@ -20,7 +20,7 @@ Keys are stored in memory with persistence to disk. Values stored on disk only.
 **Slowpoke is parallel**
 
 
-![](https://habrastorage.org/webt/tg/8x/1z/tg8x1znbhiiw3fl1csi-lw3weti.png)
+![](https://habrastorage.org/webt/yp/ok/c3/ypokc33wp-p1jcewq4a221di1hu.png)
 
 
 **Server**
