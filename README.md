@@ -17,6 +17,11 @@ Replace [Bolt](https://github.com/boltdb/bolt) with a simpler and more efficient
 
 Keys are stored in memory with persistence to disk. Values stored on disk only.
 
+**Slowpoke is parallel**
+
+
+![](https://habrastorage.org/webt/tg/8x/1z/tg8x1znbhiiw3fl1csi-lw3weti.png)
+
 
 **Server**
 
