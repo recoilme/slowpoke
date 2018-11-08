@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 )
@@ -50,7 +52,7 @@ func init() {
 }
 
 func main() {
-	Set("1", 1, 2)
+	//go Set("1", 1, 2)
 
 	var v int64
 	Get("1", 1, &v)
@@ -73,7 +75,7 @@ func toBinary(v interface{}) ([]byte, error) {
 		enc := gob.NewEncoder(buf)
 		err = enc.Encode(v)
 	}
-	log.Println("buf", buf.Bytes(), string(buf.Bytes()))
+	//log.Println("buf", buf.Bytes(), string(buf.Bytes()))
 	return buf.Bytes(), err
 }
 
@@ -98,12 +100,15 @@ func set(f string, key, val []byte) (err error) {
 		}
 
 		oldCmd, exists := db.vals[string(key)]
-		log.Println("val", val)
+		//log.Println("val", val)
 		cmd, err := writeKeyVal(db.fk, db.fv, key, val, exists, oldCmd)
 		if err != nil {
 			return err
 		}
 		db.vals[string(key)] = cmd
+		if !exists {
+			db.AppendAsc(key)
+		}
 	}
 	return err
 }
@@ -248,6 +253,39 @@ func newDb(f string) (db *Db, err error) {
 		return nil, err
 	}
 	//TODO read logs
+	//read keys
+	//get buf from pool
+	buf := new(bytes.Buffer)
+	b, _ := ioutil.ReadAll(db.fk) //fk.ReadFile()
+	buf.Write(b)
+	var readSeek uint32
+	for buf.Len() > 0 {
+		_ = uint8(buf.Next(1)[0]) //format version
+		t := uint8(buf.Next(1)[0])
+		seek := binary.BigEndian.Uint32(buf.Next(4))
+		size := binary.BigEndian.Uint32(buf.Next(4))
+		_ = buf.Next(4) //time
+		sizeKey := int(binary.BigEndian.Uint16(buf.Next(2)))
+		key := buf.Next(sizeKey)
+		strkey := string(key)
+		cmd := &Cmd{
+			Seek:    seek,
+			Size:    size,
+			KeySeek: readSeek,
+		}
+		readSeek += uint32(16 + sizeKey)
+		switch t {
+		case 0:
+			if _, exists := db.vals[strkey]; !exists {
+				//write new key at keys store
+				db.AppendAsc(key)
+			}
+			db.vals[strkey] = cmd
+		case 1:
+			delete(db.vals, strkey)
+			db.DeleteFromKeys(key)
+		}
+	}
 	return db, err
 }
 
@@ -282,7 +320,7 @@ func Get(f string, k interface{}, v interface{}) (err error) {
 		db, ok := stores.store[f]
 		if !ok {
 			//new db?
-			log.Println("newdb")
+			//log.Println("newdb")
 			db, err = newDb(f)
 			if err != nil {
 				return err
@@ -318,4 +356,44 @@ func Get(f string, k interface{}, v interface{}) (err error) {
 		}
 	}
 	return err
+}
+
+//AppendAsc insert key in slice in ascending order
+func (db Db) AppendAsc(b []byte) {
+	keysLen := len(db.keys)
+	found := db.Found(b)
+	if found == 0 {
+		//prepend
+		db.keys = append([][]byte{b}, db.keys...)
+
+	} else {
+		if found >= keysLen {
+			//not found - postpend ;)
+			db.keys = append(db.keys, b)
+		} else {
+			//found
+			//https://blog.golang.org/go-slices-usage-and-internals
+			db.keys = append(db.keys, nil)           //grow origin slice capacity if needed
+			copy(db.keys[found+1:], db.keys[found:]) //ha-ha, lol, 20x faster
+			db.keys[found] = b
+		}
+	}
+}
+
+// DeleteFromKeys delete key from slice keys
+func (db Db) DeleteFromKeys(b []byte) {
+	found := db.Found(b)
+	if found < len(db.keys) {
+		if bytes.Equal(db.keys[found], b) {
+			db.keys = append(db.keys[:found], db.keys[found+1:]...)
+		}
+	}
+}
+
+//Found return search result
+func (db Db) Found(b []byte) int {
+	found := sort.Search(len(db.keys), func(i int) bool {
+		return bytes.Compare(db.keys[i], b) >= 0
+	})
+	return found
 }
