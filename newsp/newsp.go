@@ -64,7 +64,9 @@ func toBinary(v interface{}) ([]byte, error) {
 
 	buf := new(bytes.Buffer)
 	switch v.(type) {
-	case bool, float32, float64, complex64, complex128, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, []byte:
+	case []byte:
+		return v.([]byte), nil
+	case bool, float32, float64, complex64, complex128, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 		err = binary.Write(buf, binary.BigEndian, v)
 	case int:
 		i64 := int64(v.(int))
@@ -161,9 +163,9 @@ func writeAtPos(f *os.File, b []byte, pos int64, withSync bool) (seek int64, n i
 	if err != nil {
 		return seek, n, err
 	}
-	if withSync {
-		return seek, n, f.Sync() // ensure that the write is done.
-	}
+	//if withSync {
+	//return seek, n, f.Sync() // ensure that the write is done.
+	//}
 	return seek, n, err
 }
 
@@ -286,6 +288,12 @@ func newDb(f string) (db *Db, err error) {
 			db.DeleteFromKeys(key)
 		}
 	}
+	//ctx, cancel := context.WithCancel(context.Background())
+	//runtime.SetFinalizer(db, func(dict *Db) {
+	//log.Println("Finalizer")
+	//cancel()
+	//})
+	go db.backgroundManager() //ctx)
 	return db, err
 }
 
@@ -337,18 +345,11 @@ func Get(f string, k interface{}, v interface{}) (err error) {
 		}
 	}
 
-	var buf = new(bytes.Buffer)
 	switch v.(type) {
 	case *[]byte:
-		err = gob.NewEncoder(buf).Encode(b)
-		if err != nil {
-			return err
-		}
-		err = gob.NewDecoder(buf).Decode(v)
-		if err != nil {
-			return err
-		}
+		*v.(*[]byte) = b
 	default:
+		var buf = new(bytes.Buffer)
 		buf.Write(b)
 		err = gob.NewDecoder(buf).Decode(v)
 		if err != nil {
@@ -397,3 +398,48 @@ func (db Db) Found(b []byte) int {
 	})
 	return found
 }
+
+// DeleteFile close file key and file val and delete db from map and disk
+// All data will be loss!
+func DeleteFile(file string) (err error) {
+	//Close(file)
+
+	err = os.Remove(file)
+	if err != nil {
+		return err
+	}
+	err = os.Remove(file + ".idx")
+	return err
+}
+
+// backgroundManager runs continuously in the background and performs various
+// operations such as removing expired items and syncing to disk.
+func (db *Db) backgroundManager() {
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+	for range t.C {
+		log.Println("tick")
+	}
+}
+
+/*func (db *Db) backgroundManager(parentCtx context.Context) {
+	tickChan := time.NewTicker(time.Second).C
+
+	//onExit := func(t *time.Ticker) {
+	//	log.Println("tock")
+	//	t.Stop()
+	//}
+	ctx, cancel := context.WithCancel(parentCtx)
+	defer cancel()
+	for {
+		select {
+		case <-ctx.Done():
+			tt := <-tickChan
+			tt.Stop()
+			fmt.Println("Done")
+		case <-tickChan:
+			log.Println("tick")
+		}
+	}
+
+}*/

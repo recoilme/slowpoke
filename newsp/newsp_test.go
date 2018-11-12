@@ -1,7 +1,11 @@
 package main
 
 import (
+	"fmt"
+	"runtime"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestMemBin(t *testing.T) {
@@ -26,6 +30,65 @@ func TestMemBin(t *testing.T) {
 	if i != 427 {
 		t.Error("Not 427", e)
 	}
+}
+
+func TestSet(t *testing.T) {
+	var cnt = 10000
+	file := "test/bench.db"
+	err := DeleteFile(file)
+	if err != nil {
+		fmt.Println(err)
+	}
+	var wg sync.WaitGroup
+
+	appendd := func(i int) {
+		defer wg.Done()
+		k := []byte(fmt.Sprintf("%04d", i))
+		err := Set(file, k, k)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+
+	t1 := time.Now()
+	for i := 0; i < cnt; i++ {
+		wg.Add(1)
+		go appendd(i)
+	}
+	wg.Wait()
+	t2 := time.Now()
+
+	fmt.Printf("The %d Set took %v to run.\n", cnt, t2.Sub(t1))
+}
+
+func TestGet(t *testing.T) {
+	var cnt = 10000
+	file := "test/bench.db"
+	var wg sync.WaitGroup
+
+	read := func(i int) {
+		defer wg.Done()
+		k := []byte(fmt.Sprintf("%04d", i))
+		var res []byte
+		_ = Get(file, k, &res)
+		//fmt.Println(string(res))
+
+	}
+	//_ = read
+	t3 := time.Now()
+	for i := 0; i < cnt; i++ {
+		wg.Add(1)
+		go read(i)
+		//k := []byte(fmt.Sprintf("%04d", i))
+		//_, _ = Get(file, k)
+	}
+	wg.Wait()
+	t4 := time.Now()
+
+	fmt.Printf("The %d Get took %v to run.\n", cnt, t4.Sub(t3))
+	runtime.GC()
+	// даём время горутине финализатора отработать
+	time.Sleep(10 * time.Millisecond)
 }
 
 /*
