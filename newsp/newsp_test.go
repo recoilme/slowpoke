@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -33,12 +32,12 @@ func TestMemBin(t *testing.T) {
 }
 
 func TestSet(t *testing.T) {
-	var cnt = 10000
+	var cnt = 1000000
 	file := "test/bench.db"
-	err := DeleteFile(file)
-	if err != nil {
-		fmt.Println(err)
-	}
+	//err := DeleteFile(file)
+	//if err != nil {
+	//fmt.Println(err)
+	//}
 	var wg sync.WaitGroup
 
 	appendd := func(i int) {
@@ -62,7 +61,7 @@ func TestSet(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	var cnt = 10000
+	var cnt = 1000000
 	file := "test/bench.db"
 	var wg sync.WaitGroup
 
@@ -71,9 +70,15 @@ func TestGet(t *testing.T) {
 		k := []byte(fmt.Sprintf("%04d", i))
 		var res []byte
 		_ = Get(file, k, &res)
+		if string(res) != string(k) {
+			t.Error("Not eq")
+		}
 		//fmt.Println(string(res))
 
 	}
+	wg.Add(1)
+	read(0)
+	wg.Wait()
 	//_ = read
 	t3 := time.Now()
 	for i := 0; i < cnt; i++ {
@@ -86,9 +91,9 @@ func TestGet(t *testing.T) {
 	t4 := time.Now()
 
 	fmt.Printf("The %d Get took %v to run.\n", cnt, t4.Sub(t3))
-	runtime.GC()
+
 	// даём время горутине финализатора отработать
-	time.Sleep(10 * time.Millisecond)
+	//time.Sleep(10 * time.Millisecond)
 }
 
 /*

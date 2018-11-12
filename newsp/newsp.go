@@ -97,7 +97,7 @@ func set(f string, key, val []byte) (err error) {
 			if err != nil {
 				return err
 			}
-			//log.Println("db", db)
+
 			stores.store[f] = db
 		}
 
@@ -232,6 +232,8 @@ func Set(f string, params ...interface{}) error {
 }
 
 func newDb(f string) (db *Db, err error) {
+	log.Println("newdb")
+
 	db = &Db{}
 	db.keys = make([][]byte, 0)
 	db.vals = make(map[string]*Cmd)
@@ -324,16 +326,20 @@ func Get(f string, k interface{}, v interface{}) (err error) {
 	} else {
 		//file db
 		stores.RLock()
-		defer stores.RUnlock()
 		db, ok := stores.store[f]
 		if !ok {
+			stores.RUnlock()
+			stores.Lock()
 			//new db?
 			//log.Println("newdb")
 			db, err = newDb(f)
 			if err != nil {
 				return err
 			}
+			stores.store[f] = db
+			stores.Unlock()
 		}
+
 		if val, exists := db.vals[string(key)]; exists {
 			//fmt.Printf("rr:%s %+v\n", rr.readKey, val)
 			bb := make([]byte, val.Size)
@@ -342,6 +348,9 @@ func Get(f string, k interface{}, v interface{}) (err error) {
 				return err
 			}
 			b = bb
+		}
+		if ok {
+			stores.RUnlock()
 		}
 	}
 
@@ -418,7 +427,9 @@ func (db *Db) backgroundManager() {
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 	for range t.C {
-		log.Println("tick")
+		db.fk.Sync()
+		db.fk.Sync()
+		log.Println("Sync")
 	}
 }
 
