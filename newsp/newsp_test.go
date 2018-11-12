@@ -32,12 +32,12 @@ func TestMemBin(t *testing.T) {
 }
 
 func TestSet(t *testing.T) {
-	var cnt = 1000000
+	var cnt = 100000
 	file := "test/bench.db"
-	//err := DeleteFile(file)
-	//if err != nil {
-	//fmt.Println(err)
-	//}
+	err := DeleteFile(file)
+	if err != nil {
+		fmt.Println(err)
+	}
 	var wg sync.WaitGroup
 
 	appendd := func(i int) {
@@ -61,7 +61,7 @@ func TestSet(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	var cnt = 1000000
+	var cnt = 10000
 	file := "test/bench.db"
 	var wg sync.WaitGroup
 
@@ -71,7 +71,7 @@ func TestGet(t *testing.T) {
 		var res []byte
 		_ = Get(file, k, &res)
 		if string(res) != string(k) {
-			t.Error("Not eq")
+			t.Error("Not eq", string(k), (res))
 		}
 		//fmt.Println(string(res))
 

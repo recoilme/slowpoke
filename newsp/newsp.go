@@ -301,11 +301,14 @@ func newDb(f string) (db *Db, err error) {
 
 func openFiles(f string) (fk, fv *os.File, err error) {
 	//files
+
 	fk, err = os.OpenFile(f+".idx", os.O_CREATE|os.O_RDWR, FileMode)
+	//runtime.SetFinalizer(fk, (*fk).Sync())
 	if err != nil {
 		return nil, nil, err
 	}
 	fv, err = os.OpenFile(f, os.O_CREATE|os.O_RDWR, FileMode)
+	//runtime.SetFinalizer(fv, (*fv).Sync())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -428,7 +431,7 @@ func (db *Db) backgroundManager() {
 	defer t.Stop()
 	for range t.C {
 		db.fk.Sync()
-		db.fk.Sync()
+		db.fv.Sync()
 		log.Println("Sync")
 	}
 }
