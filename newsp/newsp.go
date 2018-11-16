@@ -40,9 +40,10 @@ type Db struct {
 }
 
 type Cmd struct {
-	Seek    uint32
-	Size    uint32
-	KeySeek uint32
+	Seek       uint32
+	Size       uint32
+	KeySeek    uint32
+	CounterVal int64
 }
 
 func init() {
@@ -52,7 +53,7 @@ func init() {
 }
 
 func main() {
-	//go Set("1", 1, 2)
+	Set("1", 1, 2)
 
 	var v int64
 	Get("1", 1, &v)
@@ -393,6 +394,10 @@ func (db Db) AppendAsc(b []byte) {
 	}
 }
 
+func (db Db) Set(b []byte) {
+
+}
+
 // DeleteFromKeys delete key from slice keys
 func (db Db) DeleteFromKeys(b []byte) {
 	found := db.Found(b)
@@ -432,7 +437,6 @@ func (db *Db) backgroundManager() {
 	for range t.C {
 		db.fk.Sync()
 		db.fv.Sync()
-		log.Println("Sync")
 	}
 }
 
