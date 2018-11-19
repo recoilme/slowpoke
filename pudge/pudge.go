@@ -20,6 +20,8 @@ var (
 		sync.RWMutex
 		dbs map[string]*Db
 	}
+	// ErrKeyNotFound - key not found
+	ErrKeyNotFound = errors.New("Error: key not found")
 )
 
 // Db represent database
@@ -342,9 +344,14 @@ func (db *Db) Set(key, value interface{}) error {
 		return err
 	}
 	db.vals[string(k)] = cmd
+	switch value.(type) {
+	case int64:
+		cmd.CounterVal = value.(int64)
+	}
 	if !exists {
 		db.appendAsc(k)
 	}
+
 	return err
 }
 
@@ -395,9 +402,12 @@ func CloseAll() (err error) {
 
 // DeleteFile close and delete file
 func (db *Db) DeleteFile() error {
-	file := db.name
+	return DeleteFile(db.name)
+}
+
+func DeleteFile(file string) error {
 	dbs.Lock()
-	_, ok := dbs.dbs[file]
+	db, ok := dbs.dbs[file]
 	if ok {
 		dbs.Unlock()
 		err := db.Close()
@@ -426,23 +436,30 @@ func (db *Db) Get(key, value interface{}) error {
 		return err
 	}
 	if val, ok := db.vals[string(k)]; ok {
-		b := make([]byte, val.Size)
-		_, err := db.fv.ReadAt(b, int64(val.Seek))
-		if err != nil {
-			return err
-		}
 		switch value.(type) {
+		case *int64:
+			*value.(*int64) = val.CounterVal
 		case *[]byte:
+			b := make([]byte, val.Size)
+			_, err := db.fv.ReadAt(b, int64(val.Seek))
+			if err != nil {
+				return err
+			}
 			*value.(*[]byte) = b
 			return nil
 		default:
 			buf := new(bytes.Buffer)
+			b := make([]byte, val.Size)
+			_, err := db.fv.ReadAt(b, int64(val.Seek))
+			if err != nil {
+				return err
+			}
 			buf.Write(b)
 			err = gob.NewDecoder(buf).Decode(value)
 			return err
 		}
 	}
-	return errors.New("Error: key not found")
+	return ErrKeyNotFound
 }
 
 // Has return true if key exists.
@@ -496,5 +513,94 @@ func (db *Db) Delete(key interface{}) error {
 		writeKey(db.fk, 1, 0, 0, k, -1)
 		return nil
 	}
-	return errors.New("Error: key not found")
+	return ErrKeyNotFound
+}
+
+// Keys return keys in ascending  or descending order (false - descending,true - ascending)
+// if limit == 0 return all keys
+// if offset > 0 - skip offset records
+// If from not nil - return keys after from (from not included)
+func (db *Db) Keys(from interface{}, limit, offset int, asc bool) ([][]byte, error) {
+	db.RLock()
+	defer db.RUnlock()
+	end := 0
+	start, err := db.FindKey(from, asc)
+	if err != nil {
+		return nil, err
+	}
+	excludeFrom := 0
+	if from != nil {
+		excludeFrom = 1
+	}
+	if asc {
+		start += (offset + excludeFrom)
+		if limit == 0 {
+			end = len(db.keys) - excludeFrom
+		} else {
+			end = (start + limit - 1)
+		}
+	} else {
+		start -= (offset + excludeFrom)
+		if limit == 0 {
+			end = 0
+		} else {
+			end = start - limit + 1
+		}
+	}
+	if end < 0 {
+		end = 0
+	}
+	if end >= len(db.keys) {
+		end = len(db.keys) - 1
+	}
+	// resulting array
+	arr := make([][]byte, 0, 0)
+	if start < 0 || start >= len(db.keys) {
+		return arr, nil
+	}
+	if asc {
+		for i := start; i <= end; i++ {
+			arr = append(arr, db.keys[i])
+		}
+	} else {
+		for i := start; i >= end; i-- {
+			arr = append(arr, db.keys[i])
+		}
+	}
+	return arr, nil
+}
+
+// FindKey return index of first key in ascending mode
+// FindKey return index of last key in descending mode
+func (db *Db) FindKey(key interface{}, asc bool) (int, error) {
+	if key == nil {
+		if asc {
+			return 0, nil
+		}
+		return len(db.keys) - 1, nil
+	}
+	k, err := keyToBinary(key)
+	if err != nil {
+		return -1, err
+	}
+	found := db.found(k)
+	// check found
+	if found >= len(db.keys) {
+		return -1, ErrKeyNotFound
+	}
+	if !bytes.Equal(db.keys[found], k) {
+		return -1, ErrKeyNotFound
+	}
+	return found, nil
+}
+
+func (db *Db) Counter(key interface{}) (int64, error) {
+	var counter int64
+	err := db.Get(key, &counter)
+	if err != nil {
+		return -1, err
+	}
+	counter++
+	err = db.Set(key, counter)
+	return counter, nil
 }
