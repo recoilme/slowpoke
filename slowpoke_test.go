@@ -6,20 +6,21 @@ import (
 	"encoding/gob"
 	"fmt"
 	"math/rand"
-	"runtime"
 	"sort"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/recoilme/pudge"
 )
 
 func logg(i interface{}) {
 
-	t := time.Now()
-	fmt.Printf("%02d.%02d.%04d %02d:%02d:%02d\t%v\n",
-		t.Day(), t.Month(), t.Year(),
-		t.Hour(), t.Minute(), t.Second(), i)
+	//t := time.Now()
+	//fmt.Printf("%02d.%02d.%04d %02d:%02d:%02d\t%v\n",
+	//	t.Day(), t.Month(), t.Year(),
+	//	t.Hour(), t.Minute(), t.Second(), i)
 }
 
 func ch(err error, t *testing.T) {
@@ -43,8 +44,6 @@ func TestBase(t *testing.T) {
 	err = Set(f, key, []byte("3"))
 	ch(err, t)
 	Close(f)
-	/* Force GC, to require finalizer to run */
-	runtime.GC()
 
 	b, err = Get(f, key)
 	if !bytes.Equal(b, []byte("3")) {
@@ -83,16 +82,23 @@ func TestOpen(t *testing.T) {
 	//fmt.Println(d)
 	Set("test/open.db", []byte("foo"), []byte("bar"))
 	//val, ok := d.ReadKey("foo")
-	fmt.Println(Get("test/open.db", []byte("foo")))
-	d.deleteKey("foo")
-	_, ok := d.readKey("foo")
-	fmt.Println(ok)
+	ret, _ := Get("test/open.db", []byte("foo"))
+	if bytes.Compare(ret, []byte("bar")) != 0 {
+		t.Error("not bar", ret)
+	}
+	d.Delete("foo")
+	var v string
+	err := d.Get("foo", &v)
+	if err != pudge.ErrKeyNotFound {
+		t.Error(err)
+	}
+
 }
 
 func TestAsync(t *testing.T) {
 	len := 5
 	file := "test/async.db"
-	DeleteFile(file)
+	//DeleteFile(file)
 	defer CloseAll()
 
 	messages := make(chan int)
@@ -138,7 +144,8 @@ func TestAsync(t *testing.T) {
 
 	go func() {
 		for i := range readmessages {
-			fmt.Println(i)
+			_ = i
+			//fmt.Println(i)
 		}
 	}()
 
@@ -245,7 +252,11 @@ func TestBench(t *testing.T) {
 	fmt.Printf("The second 100 Keys took %v to run.\n", t10.Sub(t9))
 
 	t11 := time.Now()
-	_ = Gets(file, keys)
+	result := Gets(file, keys)
+	_ = result
+	//for _, r := range result {
+	//log.Println(string(r))
+	//}
 	t12 := time.Now()
 	fmt.Printf("The 100 Gets took %v to run.\n", t12.Sub(t11))
 	CloseAll()
@@ -257,7 +268,10 @@ func TestSet(t *testing.T) {
 	//ch(err, t)
 	defer CloseAll()
 	val, err := Get("test/nodb.db", []byte("1"))
-	logg(val)
+	if val != nil {
+		t.Error("not nil")
+	}
+	//logg(val)
 
 	err = Set("test/1.db", []byte("1"), []byte("11"))
 	ch(err, t)
@@ -272,12 +286,14 @@ func TestGet(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	logg("Get:" + string(res))
+	_ = res
+	//logg("Get:" + string(res))
 	res2, err2 := Get("test/1.db", []byte("2"))
 	if err2 != nil {
 		t.Error(err2)
 	}
-	logg("Get:" + string(res2))
+	_ = res2
+	//logg("Get:" + string(res2))
 	keys, err := Keys("test/1.db", nil, 0, 0, true)
 	ch(err, t)
 
@@ -298,6 +314,7 @@ func TestDelete(t *testing.T) {
 	err = Set(f, []byte("2"), []byte("22"))
 	ch(err, t)
 	res, err := Get(f, []byte("2"))
+
 	logg(res)
 	deleted, err := Delete(f, []byte("2"))
 	logg(deleted)
@@ -319,7 +336,7 @@ func TestDelete(t *testing.T) {
 func TestRewriteVal(t *testing.T) {
 	var err error
 	f := "test/TestRewriteVal.db"
-	fmt.Println("123")
+	//fmt.Println("123")
 	DeleteFile(f)
 	_, err = Open(f)
 	ch(err, t)
@@ -545,15 +562,16 @@ func TestBinGob(t *testing.T) {
 	SetGob(file, b, "post4")
 	var val string
 	GetGob(file, b, &val)
+	//log.Println("gob!", e, val)
 	if val != "post4" {
-		t.Error("not post4")
+		t.Error("not post4", val)
 	}
 
 	bb := make([]byte, 4)
 	binary.BigEndian.PutUint32(bb, uint32(3))
 	GetGob(file, b, &val)
 	if val != "post4" {
-		t.Error("not post4")
+		t.Error("not post4", val)
 	}
 }
 
@@ -582,7 +600,7 @@ func TestGob(t *testing.T) {
 	// mix gob with other methods
 	keys, err := Keys(file, nil, 1, 0, false)
 	ch(err, t)
-	fmt.Println(keys)
+	//fmt.Println(keys)
 	var k int
 	buf := bytes.Buffer{}
 	buf.Write(keys[0])
@@ -599,7 +617,7 @@ func TestGob(t *testing.T) {
 	buf.Write(bin)
 	p := &Post{}
 	if err := gob.NewDecoder(&buf).Decode(&p); err == nil {
-		fmt.Println(p)
+		//fmt.Println(p)
 		if p.Id != 19 {
 			t.Error("gob not 19")
 		}
@@ -625,6 +643,7 @@ func Prepend(items []interface{}, item interface{}) []interface{} {
 	return append([]interface{}{item}, items...)
 }
 func TestSortedInsert(t *testing.T) {
+	size := 10000
 	var keys = make([][]byte, 0)
 	var keysSort = make([][]byte, 0)
 	ins := func(b []byte) {
@@ -650,7 +669,7 @@ func TestSortedInsert(t *testing.T) {
 		}
 	}
 	//ins(nil)
-	for i := 10000; i >= 0; i-- {
+	for i := size; i >= 0; i-- {
 		s1 := rand.NewSource(time.Now().UnixNano())
 		r := rand.New(s1)
 		i := r.Intn(42)
@@ -662,11 +681,13 @@ func TestSortedInsert(t *testing.T) {
 	}
 
 	t5 := time.Now()
+	_ = ins
 	for _, v := range keysSort {
+		//_ = v
 		ins(v)
 	}
 	t6 := time.Now()
-	fmt.Printf("The 10000 Sorted insert took %v to run.\n", t6.Sub(t5))
+	fmt.Printf("The %d Sorted insert took %v to run.\n", size, t6.Sub(t5))
 
 	//10000 insert- 1s :(
 	t1 := time.Now()
@@ -674,7 +695,7 @@ func TestSortedInsert(t *testing.T) {
 		return bytes.Compare(keysSort[i], keysSort[j]) <= 0
 	})
 	t2 := time.Now()
-	fmt.Printf("The 10000 Sort took %v to run.\n", t2.Sub(t1))
+	fmt.Printf("The %d Sort took %v to run.\n", size, t2.Sub(t1))
 	//10000 sort - 1.360s // 8.265034ms
 	//insert faster :)
 
@@ -683,19 +704,8 @@ func TestSortedInsert(t *testing.T) {
 		return bytes.Compare(keysSort[i], keysSort[j]) <= 0
 	})
 	t4 := time.Now()
-	fmt.Printf("The 10000 2 Sort took %v to run.\n", t4.Sub(t3))
+	fmt.Printf("The %d 2 Sort took %v to run.\n", size, t4.Sub(t3))
 
-	/*
-		output
-		The 10000 Sorted insert took 1.772675355s to run.
-		The 10000 Sort took 14.423865ms to run.
-		The 10000 2 Sort took 8.995405ms to run.
-
-		The 10000 Sorted insert took 43.034722ms to run.
-		The 10000 Sort took 12.715538ms to run.
-		The 10000 2 Sort took 19.648586ms to run.
-		PASS
-	*/
 	for k, v := range keysSort {
 		//fmt.Println(k, string(v), string(keys[k]))
 		if string(v) != string(keys[k]) {
@@ -790,30 +800,32 @@ func TestAsterix(t *testing.T) {
 		Set(f, []byte(v), nil)
 	}
 	k1, _ := Keys(f, []byte("ka"), uint32(0), uint32(0), true)
-	fmt.Println(k1) //[]
+	_ = k1
+	//fmt.Println(k1) //[]
 	ka, _ := Keys(f, []byte("ka*"), uint32(0), uint32(0), true)
+	res1 := ""
 	for _, s := range ka {
-		fmt.Println(string(s))
+		res1 += (string(s))
 	}
-	/*
-		ka1
-		ka2
-		ka3
-	*/
+	if res1 != "ka1ka2ka3" {
+		t.Error("Not", "ka1ka2ka3")
+	}
 
 	kast, _ := Keys(f, []byte("k**"), uint32(0), uint32(0), true)
+
+	res2 := ""
 	for _, s := range kast {
-		fmt.Println(string(s))
+		res2 += (string(s))
 	}
-	/*
-		k*1
-		k*2
-		k*3
-	*/
-	fmt.Println("kfrom")
+	if res2 != "k*1k*2k*3" {
+		t.Error("Not", "k*1k*2k*3")
+	}
+
+	//fmt.Println("kfrom")
 	kfrom, _ := Keys(f, []byte("k*1"), uint32(0), uint32(0), true)
 	for _, s := range kfrom {
-		fmt.Println(string(s))
+		_ = s
+		//fmt.Println(string(s))
 	}
 	/*
 		k*2

@@ -90,9 +90,9 @@ func testSet() {
 }
 
 //macbook 2017 slowpoke vs bolt
-//The 100 Set took 19.440075ms to run./19.272079ms
-//The 100 Get took 671.343µs to run./211.878µs
-//The 100 Sets took 1.139579ms to run./?
-//The 100 Keys took 36.214µs to run./?
-//The second 100 Keys took 5.632µs to run./?
-//The 100 Gets took 206.775µs to run./?
+//The 100 Set took 2.903848ms to run.
+//The 100 Get took 363.049µs to run.
+//The 100 Sets took 1.933155ms to run.
+//The 100 Keys took 20.321µs to run.
+//The second 100 Keys took 9.6µs to run.
+//The 100 Gets took 270.813µs to run.
