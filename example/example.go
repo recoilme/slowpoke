@@ -117,7 +117,7 @@ func gobExample() {
 	if bin, err := slowpoke.Get(file, key); err == nil {
 		bufOut.Write(bin)
 		if err := dec.Decode(&postOut); err == nil {
-			fmt.Println("Post out:")
+			fmt.Println("\nPost out:")
 			fmt.Println("Content:", postOut.Content, "Id:", postOut.Id)
 		}
 	}
