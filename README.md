@@ -213,24 +213,3 @@ Concurrency: 2
 | 1M Put, ops/sec       | 5336    | 34743     | 8054   | 33539    | 47298  | 46789    | 439581     |
 | 1M Get, ops/sec       | 1782423 | 98406     | 499871 | 220597   | 499172 | 445783   | 1652069    |
 | FileSize,Mb           | 568     | 357       | 552    | 487      | 358    | 358      | 358        |
-
-
-
-macbook 2017 slowpoke vs badger
-
-
-```
-//https://github.com/recoilme/datastore_benchmarks
-
-Slowpoke:
-Put time: 1.16221931s
-Get time: 805.776917ms
-Db size: 1 048 570 bytes (Zero bytes overhead)
-Index size: 5 033 136 bytes
-
-Badger:
-Put time: 902.318742ms
-Get time: 723.95486ms
-Vlog size: 7 247 634 bytes
-Sst size: 6 445 276 bytes
-```
