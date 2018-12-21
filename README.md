@@ -11,7 +11,9 @@ Description on russian: https://habr.com/post/354224/
 
 **Motivation**
 
-Replace [Bolt](https://github.com/boltdb/bolt) with a simpler and more efficient engine: http://recoilmeblog.tggram.com/post/96
+Replace [Bolt](https://github.com/boltdb/bolt) with a simpler and more efficient engine.
+
+Slowpoke (from version 2.0) based on [pudge](https://github.com/recoilme/pudge)
 
 **How it works**
 
@@ -163,7 +165,7 @@ All methods are thread-safe.
 
 - **Set/Sets/SetGob** 
 
-Store val and key with sync at end. If the file does not exist it will be created. 
+Store val and key. If the file does not exist it will be created. 
 
 
 - **Get/Gets/GetGob** 
@@ -180,21 +182,8 @@ If `from` is not nil, return keys lexicographically greater than the `from` valu
 
 If `from` ends with asterix `*`, return keys with the prefix equal to `from` without the asterix.
 
-- **Open/Close** 
 
-`Open` - open/create the file possibly creating appropriate directories, and read keys.
-
-`Close` - close the databse and free used memory.
-
-
-- **CloseAll** 
-
-Close all files and remove keys from memory
-
-
-- **DeleteFile** 
-
-Delete files from disk and lose all the data.
+[Documentation](https://godoc.org/github.com/recoilme/slowpoke)
 
 
 **Status**
