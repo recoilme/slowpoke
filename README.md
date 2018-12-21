@@ -197,10 +197,6 @@ Close all files and remove keys from memory
 Delete files from disk and lose all the data.
 
 
-**Used libraries**
-
--
-
 **Status**
 
 Used in production (master branch)
