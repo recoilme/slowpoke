@@ -208,33 +208,23 @@ Used in production (master branch)
 
 **Benchmark**
 
+[All tests here](https://github.com/recoilme/pogreb-bench)
 
-macbook 2017 slowpoke vs bolt
-
-```
-//The 100 Set took 18.426239ms to run./19.272079ms
-//The 100 Sets took 1.891625ms to run./?
-//The 100 Get took 653.938µs to run./211.878µs
-//The 100 Gets took 206.775µs to run./?
-//The 100 Keys took 13.591µs to run./?
-//The second 100 Keys took 7.695µs to run./?
-```
-
-macbook 2017 slowpoke vs badger
+Some tests, MacBook Pro (Retina, 13-inch, Early 2015)
+=====================================================
 
 
-```
-//https://github.com/recoilme/datastore_benchmarks
+### Test 1
+Number of keys: 1000000
+Minimum key size: 16, maximum key size: 64
+Minimum value size: 128, maximum value size: 512
+Concurrency: 2
 
-Slowpoke:
-Put time: 1.16221931s
-Get time: 805.776917ms
-Db size: 1 048 570 bytes (Zero bytes overhead)
-Index size: 5 033 136 bytes
 
-Badger:
-Put time: 902.318742ms
-Get time: 723.95486ms
-Vlog size: 7 247 634 bytes
-Sst size: 6 445 276 bytes
-```
+|                       | pogreb  | goleveldb | bolt   | badgerdb | pudge  | slowpoke | pudge(mem) |
+|-----------------------|---------|-----------|--------|----------|--------|----------|------------|
+| 1M (Put+Get), seconds | 187     | 38        | 126    | 34       | 23     | 23       | 2          |
+| 1M Put, ops/sec       | 5336    | 34743     | 8054   | 33539    | 47298  | 46789    | 439581     |
+| 1M Get, ops/sec       | 1782423 | 98406     | 499871 | 220597   | 499172 | 445783   | 1652069    |
+| FileSize,Mb           | 568     | 357       | 552    | 487      | 358    | 358      | 358        |
+
