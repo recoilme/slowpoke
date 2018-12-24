@@ -4,6 +4,7 @@ package slowpoke
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/gob"
 	"reflect"
 
@@ -48,8 +49,18 @@ func Count(file string) (uint64, error) {
 
 // Counter return unique uint64
 func Counter(file string, key []byte) (counter uint64, err error) {
-	res, err := pudge.Counter(file, key, 1)
-	return uint64(res), err
+	val, err := Get(file, key)
+	if val == nil || len(val) != 8 {
+		err = nil
+		counter = 0
+	} else {
+		counter = binary.BigEndian.Uint64(val)
+	}
+	counter++
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, counter)
+	err = Set(file, key, b)
+	return counter, err
 }
 
 // Open open/create Db (with dirs)
