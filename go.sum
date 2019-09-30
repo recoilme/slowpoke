@@ -1,0 +1,6 @@
+github.com/boltdb/bolt v1.3.1 h1:JQmyP4ZBrce+ZQu0dY660FMfatumYDLun9hBCUVIkF4=
+github.com/boltdb/bolt v1.3.1/go.mod h1:clJnj/oiGkjum5o1McbSZDSLxVThjynRyGBgiAx27Ps=
+github.com/recoilme/pudge v1.0.3 h1:h/9dEv5fRqtzM4lnO69kUoN+k7ukxxrW9NGb9ug0grM=
+github.com/recoilme/pudge v1.0.3/go.mod h1:VMvxBLVkrSStldckzCsETBXox3pfovfrnEchafXk8qA=
+golang.org/x/sys v0.0.0-20190927073244-c990c680b611 h1:q9u40nxWT5zRClI/uU9dHCiYGottAg6Nzz4YUQyHxdA=
+golang.org/x/sys v0.0.0-20190927073244-c990c680b611/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
